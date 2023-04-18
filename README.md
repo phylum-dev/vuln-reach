@@ -11,6 +11,8 @@
 
 # How does it work?
 
-# How do you add support for additional languages?
+# Contributing
+## Building
+## How do you add support for additional languages?
 
 # Support
