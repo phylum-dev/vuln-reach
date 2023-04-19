@@ -473,7 +473,7 @@ mod tests {
     use textwrap::dedent;
 
     use super::*;
-    use crate::javascript::module::{MemModuleResolver};
+    use crate::javascript::module::MemModuleResolver;
     use crate::javascript::package::Package;
 
     macro_rules! mem_fixture {
