@@ -68,9 +68,9 @@ pub type ReachabilityPath = Vec<(String, Vec<(String, NodePath)>)>;
 /// Maps a package name to the graph of accesses (represented as adjacency
 /// lists) that lead to the vulnerable node, starting from that package.
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq)]
-pub struct ProjectNodeReachability(HashMap<String, Vec<ReachabilityEdge>>);
+pub struct ProjectReachability(HashMap<String, Vec<ReachabilityEdge>>);
 
-impl ProjectNodeReachability {
+impl ProjectReachability {
     pub fn new(adjacency_lists: HashMap<String, Vec<ReachabilityEdge>>) -> Self {
         Self(adjacency_lists)
     }
@@ -147,21 +147,6 @@ impl ProjectNodeReachability {
     }
 }
 
-/// Map of reachabilities of a given set of nodes inside a project.
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq)]
-pub struct ProjectReachability(HashMap<VulnerableNode, ProjectNodeReachability>);
-
-impl ProjectReachability {
-    pub fn find_paths<'a>(
-        &'a self,
-        top_level_package: &'a str,
-    ) -> impl Iterator<Item = (&'a VulnerableNode, Option<ReachabilityPath>)> + 'a {
-        self.0
-            .iter()
-            .map(move |(node, reachability)| (node, reachability.find_path(top_level_package)))
-    }
-}
-
 pub struct Project<R: ModuleResolver> {
     package_resolver: PackageResolver<R>,
     packages: Vec<String>,
@@ -172,33 +157,16 @@ impl<R: ModuleResolver> Project<R> {
         Self { package_resolver, packages }
     }
 
-    pub fn reachability<I: Iterator<Item = VulnerableNode>>(
-        &self,
-        vuln_nodes: I,
-    ) -> ProjectReachability {
-        ProjectReachability(
-            vuln_nodes
-                .map(|vuln_node| {
-                    let reachability = self.reachability_inner(&vuln_node, Default::default());
-                    (vuln_node, reachability)
-                })
-                .collect(),
-        )
+    pub fn reachability(&self, vuln_node: &VulnerableNode) -> ProjectReachability {
+        self.reachability_inner(vuln_node, Default::default())
     }
 
-    pub fn reachability_extend<'a, I: Iterator<Item = VulnerableNode>>(
-        &'a self,
-        project_reachability: &'a mut ProjectReachability,
-        vuln_nodes: I,
-    ) -> &mut ProjectReachability {
-        for vuln_node in vuln_nodes {
-            let project_node_reachability =
-                project_reachability.0.remove(&vuln_node).unwrap_or_default();
-            let reachability = self.reachability_inner(&vuln_node, project_node_reachability);
-            project_reachability.0.insert(vuln_node, reachability);
-        }
-
-        project_reachability
+    pub fn reachability_extend(
+        &self,
+        project_reachability: ProjectReachability,
+        vuln_node: &VulnerableNode,
+    ) -> ProjectReachability {
+        self.reachability_inner(vuln_node, project_reachability)
     }
 
     pub fn all_packages(&self) -> Vec<(&str, &Package<R>)> {
@@ -215,9 +183,9 @@ impl<R: ModuleResolver> Project<R> {
     fn reachability_inner<'a>(
         &'a self,
         vuln_node: &'a VulnerableNode,
-        package_reachabilities: ProjectNodeReachability,
-    ) -> ProjectNodeReachability {
-        let ProjectNodeReachability(mut package_reachabilities) = package_reachabilities;
+        package_reachabilities: ProjectReachability,
+    ) -> ProjectReachability {
+        let ProjectReachability(mut package_reachabilities) = package_reachabilities;
 
         // Using foreign imports for each package, build a list of edges (a, b)
         // where b depends on a.
@@ -394,7 +362,7 @@ impl<R: ModuleResolver> Project<R> {
         // Pick out reachability for the topmost package. By construction, it should
         // always be the last one in the topological ordering. We should build tests
         // to ensure this is the case.
-        ProjectNodeReachability::new(package_reachabilities)
+        ProjectReachability::new(package_reachabilities)
     }
 }
 

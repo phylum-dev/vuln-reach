@@ -112,12 +112,12 @@ impl ProjectDef {
         // Build the project object.
         let project = Project::new(package_resolver, packages);
 
-        // Compute reachability.
-        let reachability = project.reachability(self.vuln.into_iter());
+        // Compute reachability for each node.
+        for node in &self.vuln {
+            let reachability = project.reachability(node);
 
-        let paths = reachability.find_paths(&self.name);
+            let path = reachability.find_path(&self.name);
 
-        for (node, path) in paths {
             match path {
                 Some(path) => {
                     println!(
