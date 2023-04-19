@@ -253,6 +253,9 @@ impl Display for NodeStep {
 }
 
 /// A path between two given nodes in a source file.
+///
+/// It is an ordered vector of [`NodeStep`] items. Each [`NodeStep`] element
+/// [accesses][`crate::javascript::lang::accesses`] the element after it.
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct NodePath(Vec<NodeStep>);
 
@@ -305,7 +308,7 @@ impl IntoIterator for NodePath {
 
 /// The graph of all paths in a package which go from a vulnerable node
 /// to an export.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct PackageReachability(HashMap<String, HashMap<String, HashSet<NodePath>>>);
 
 impl PackageReachability {

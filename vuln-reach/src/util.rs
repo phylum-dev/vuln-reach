@@ -9,7 +9,7 @@ use std::path::{Component, Path, PathBuf};
 /// fail, or on Windows returns annoying device paths. This is a problem Cargo
 /// needs to improve on.
 ///
-/// Taken from https://github.com/rust-lang/cargo/blob/efd37336e94e2f98260ad28d89e509e02fe4a556/crates/cargo-util/src/paths.rs
+/// Taken from <https://github.com/rust-lang/cargo/blob/efd37336e94e2f98260ad28d89e509e02fe4a556/crates/cargo-util/src/paths.rs>.
 pub fn normalize_path(path: &Path) -> PathBuf {
     let mut components = path.components().peekable();
     let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {

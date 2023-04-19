@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 
+use serde::{Deserialize, Serialize};
 use tree_sitter::Node;
 
 use super::lang::imports::Imports;
@@ -13,7 +14,7 @@ use crate::javascript::package::reachability::NodePath;
 use crate::javascript::package::resolver::PackageResolver;
 
 /// Specifies the package and module that direct towards a vulnerability.
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct VulnerableEdge {
     package: String,
     module: String,
@@ -27,7 +28,7 @@ impl VulnerableEdge {
 
 /// An instance of in-package reachability that leads either to
 /// the vulnerability itself, or to an intermediate package.
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum ReachabilityEdge {
     /// The vulnerability itself is reachable.
     Own(PackageReachability),
@@ -45,17 +46,33 @@ impl ReachabilityEdge {
     }
 }
 
+/// A single path between a node in a package and a vulnerable node.
+///
+/// This is a hierarchical ordered representation, of the following form:
+///
+/// ```json
+/// {
+///   "dependent_package": {
+///     "module1.js": ["node1", "node2", ...]
+///   },
+///   ...,
+///   "vulnerable_package": {
+///     "module2.js": ["node3", "node4", ... "vulnerable_node"]
+///   }
+/// }
+/// ```
 pub type ReachabilityPath = Vec<(String, Vec<(String, NodePath)>)>;
 
 /// Reachability of a given node inside of a project.
-#[derive(Debug)]
-pub struct ProjectNodeReachability {
-    adjacency_lists: HashMap<String, Vec<ReachabilityEdge>>,
-}
+///
+/// Maps a package name to the graph of accesses (represented as adjacency
+/// lists) that lead to the vulnerable node, starting from that package.
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq)]
+pub struct ProjectNodeReachability(HashMap<String, Vec<ReachabilityEdge>>);
 
 impl ProjectNodeReachability {
     pub fn new(adjacency_lists: HashMap<String, Vec<ReachabilityEdge>>) -> Self {
-        Self { adjacency_lists }
+        Self(adjacency_lists)
     }
 
     /// Find one possible path from the specified package to the vulnerable
@@ -73,7 +90,7 @@ impl ProjectNodeReachability {
         //
         // This maps to the client having N files in their project, and starting a
         // search for a path from each of those N files.
-        for edge in self.adjacency_lists.get(start_package.as_ref())? {
+        for edge in self.0.get(start_package.as_ref())? {
             for module_spec in edge.reachability().modules() {
                 bfs_q.push_back(EvaluationStep {
                     src_package: start_package.as_ref(),
@@ -93,7 +110,7 @@ impl ProjectNodeReachability {
             // Stop searching in this branch if it would lead to a non-existing package.
             // In practice, this should only happen in the top-level package if it is
             // misnamed, as `self` should contain only valid edges.
-            let Some(edges) = self.adjacency_lists.get(src_package) else { continue };
+            let Some(edges) = self.0.get(src_package) else { continue };
 
             for edge in edges {
                 // Each edge maintains its own copy of the step path.
@@ -131,7 +148,7 @@ impl ProjectNodeReachability {
 }
 
 /// Map of reachabilities of a given set of nodes inside a project.
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq)]
 pub struct ProjectReachability(HashMap<VulnerableNode, ProjectNodeReachability>);
 
 impl ProjectReachability {
@@ -162,11 +179,26 @@ impl<R: ModuleResolver> Project<R> {
         ProjectReachability(
             vuln_nodes
                 .map(|vuln_node| {
-                    let reachability = self.reachability_inner(&vuln_node);
+                    let reachability = self.reachability_inner(&vuln_node, Default::default());
                     (vuln_node, reachability)
                 })
                 .collect(),
         )
+    }
+
+    pub fn reachability_extend<'a, I: Iterator<Item = VulnerableNode>>(
+        &'a self,
+        project_reachability: &'a mut ProjectReachability,
+        vuln_nodes: I,
+    ) -> &mut ProjectReachability {
+        for vuln_node in vuln_nodes {
+            let project_node_reachability =
+                project_reachability.0.remove(&vuln_node).unwrap_or_default();
+            let reachability = self.reachability_inner(&vuln_node, project_node_reachability);
+            project_reachability.0.insert(vuln_node, reachability);
+        }
+
+        project_reachability
     }
 
     pub fn all_packages(&self) -> Vec<(&str, &Package<R>)> {
@@ -180,8 +212,12 @@ impl<R: ModuleResolver> Project<R> {
             .collect()
     }
 
-    fn reachability_inner<'a>(&'a self, vuln_node: &'a VulnerableNode) -> ProjectNodeReachability {
-        let mut package_reachabilities: HashMap<String, Vec<ReachabilityEdge>> = Default::default();
+    fn reachability_inner<'a>(
+        &'a self,
+        vuln_node: &'a VulnerableNode,
+        package_reachabilities: ProjectNodeReachability,
+    ) -> ProjectNodeReachability {
+        let ProjectNodeReachability(mut package_reachabilities) = package_reachabilities;
 
         // Using foreign imports for each package, build a list of edges (a, b)
         // where b depends on a.
@@ -233,6 +269,10 @@ impl<R: ModuleResolver> Project<R> {
         //   starting from the information in package K's reachability.
 
         for package_spec in topo_ordering.into_iter().rev() {
+            if package_reachabilities.contains_key(package_spec) {
+                continue;
+            }
+
             let mut target_nodes: Vec<(VulnerableNode, Option<VulnerableEdge>)> = Vec::new();
 
             // If the vulnerable spec pertains to the currently processed package,
@@ -433,7 +473,7 @@ mod tests {
     use textwrap::dedent;
 
     use super::*;
-    use crate::javascript::module::MemModuleResolver;
+    use crate::javascript::module::{MemModuleResolver};
     use crate::javascript::package::Package;
 
     macro_rules! mem_fixture {
@@ -536,7 +576,10 @@ mod tests {
     fn test_trivial_reachability_esm() {
         let project = project_trivial_esm();
 
-        let r = project.reachability_inner(&VulnerableNode::new("dependency", "vuln.js", 1, 31));
+        let r = project.reachability_inner(
+            &VulnerableNode::new("dependency", "vuln.js", 1, 31),
+            Default::default(),
+        );
         let path = r.find_path("dependent").unwrap();
         println!("{:#?}", r);
         print_path(path);
@@ -546,7 +589,10 @@ mod tests {
     fn test_trivial_reachability_cjs() {
         let project = project_trivial_cjs();
 
-        let r = project.reachability_inner(&VulnerableNode::new("dependency", "vuln.js", 1, 41));
+        let r = project.reachability_inner(
+            &VulnerableNode::new("dependency", "vuln.js", 1, 41),
+            Default::default(),
+        );
         let path = r.find_path("dependent").unwrap();
         println!("{:#?}", r);
         print_path(path);
