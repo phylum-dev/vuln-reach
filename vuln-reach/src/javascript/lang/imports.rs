@@ -369,25 +369,32 @@ mod tests {
 
         assert_eq!(imports.0.len(), 5);
 
-        assert!(matches!(
-            imports.0[0],
-            EsmImport::Namespace { name: "namespaced", source: "foo", .. }
-        ));
-        assert!(matches!(
-            imports.0[1],
-            EsmImport::Default { name: "defaultImport", source: "foo", .. }
-        ));
-        assert!(matches!(
-            imports.0[2],
-            EsmImport::Default { name: "defaultImportComposite", source: "foo", .. }
-        ));
-        assert!(matches!(
-            imports.0[3],
-            EsmImport::Named { name: "named1", alias: None, source: "foo", .. }
-        ));
-        assert!(matches!(
-            imports.0[4],
-            EsmImport::Named { name: "named2", alias: Some("foo"), source: "foo", .. }
-        ));
+        assert!(matches!(imports.0[0], EsmImport::Namespace {
+            name: "namespaced",
+            source: "foo",
+            ..
+        }));
+        assert!(matches!(imports.0[1], EsmImport::Default {
+            name: "defaultImport",
+            source: "foo",
+            ..
+        }));
+        assert!(matches!(imports.0[2], EsmImport::Default {
+            name: "defaultImportComposite",
+            source: "foo",
+            ..
+        }));
+        assert!(matches!(imports.0[3], EsmImport::Named {
+            name: "named1",
+            alias: None,
+            source: "foo",
+            ..
+        }));
+        assert!(matches!(imports.0[4], EsmImport::Named {
+            name: "named2",
+            alias: Some("foo"),
+            source: "foo",
+            ..
+        }));
     }
 }

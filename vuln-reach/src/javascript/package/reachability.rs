@@ -731,20 +731,17 @@ mod tests {
         println!("{r:#?}");
         println!("{r}");
 
-        assert_eq!(
-            r.reachable_exports(),
-            hashset! {
-                ("source1.mjs", "reaches1"),
-                ("source1.mjs", "reaches2"),
-                ("source1.mjs", "reaches3"),
-                ("source3.mjs", "reaches"),
-                ("source4.mjs", "reaches"),
-                ("index.mjs", "explicit_export"),
-                ("index.mjs", "reaches"),
-                ("index.mjs", "reaches2"),
-                ("index.mjs", "source4"),
-            }
-        );
+        assert_eq!(r.reachable_exports(), hashset! {
+            ("source1.mjs", "reaches1"),
+            ("source1.mjs", "reaches2"),
+            ("source1.mjs", "reaches3"),
+            ("source3.mjs", "reaches"),
+            ("source4.mjs", "reaches"),
+            ("index.mjs", "explicit_export"),
+            ("index.mjs", "reaches"),
+            ("index.mjs", "reaches2"),
+            ("index.mjs", "source4"),
+        });
     }
 
     #[test]

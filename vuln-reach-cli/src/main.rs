@@ -4,12 +4,12 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use futures::future;
+use serde::Deserialize;
+use tokio::fs;
 use vuln_reach::javascript::package::reachability::{NodePath, VulnerableNode};
 use vuln_reach::javascript::package::resolver::PackageResolver;
 use vuln_reach::javascript::package::Package;
 use vuln_reach::javascript::project::Project;
-use serde::Deserialize;
-use tokio::fs;
 
 #[derive(Deserialize)]
 struct NpmRegistry {
