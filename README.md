@@ -72,3 +72,6 @@ Adding support for a new language requires the following steps:
 - Create a module directory for your language in the [top level](https://github.com/phylum-dev/vuln-reach/blob/main/vuln-reach/src) of the `vuln-reach` package.
 - Implement abstractions for the language's imports and exports.
 - Implement [the concept of access](https://github.com/phylum-dev/vuln-reach/blob/main/vuln-reach/src/javascript/lang/accesses.rs) for your language -- this could be as simple as being equivalent to "function call" or as complex as necessary.
+
+# Commercial Licensing
+If you're interested in using `vuln reach` in a commercial project and need a different licensing agreement, please reach out to partnerships@phylum.io.
