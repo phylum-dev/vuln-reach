@@ -7,7 +7,7 @@
 # Overview
 **Vuln Reach** is a library for developing tools that determine if a given vulnerability is reachable. Provided to the open source community by [Phylum](https://phylum.io) to help reduce false positives and increase signal-to-noise for software developers.
 
-![Vuln Reach Demo Video](https://github.com/phylum-dev/vuln-reach/raw/main/assets/vulnreach.webp)
+<img src="https://github.com/phylum-dev/vuln-reach/raw/main/assets/vulnreach.webp" width="830">
 
 # How does it work?
 
