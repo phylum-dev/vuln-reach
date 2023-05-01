@@ -75,7 +75,8 @@ impl ProjectReachability {
         Self(adjacency_lists)
     }
 
-    /// Return the graph edges leaving from the specified package, if they exist.
+    /// Return the graph edges leaving from the specified package, if they
+    /// exist.
     pub fn edges_from(&self, package: &str) -> Option<&Vec<ReachabilityEdge>> {
         self.0.get(package)
     }
