@@ -75,6 +75,11 @@ impl ProjectReachability {
         Self(adjacency_lists)
     }
 
+    /// Return the graph edges leaving from the specified package, if they exist.
+    pub fn edges_from(&self, package: &str) -> Option<&Vec<ReachabilityEdge>> {
+        self.0.get(package)
+    }
+
     /// Find one possible path from the specified package to the vulnerable
     /// node.
     pub fn find_path<S: AsRef<str>>(&self, start_package: S) -> Option<ReachabilityPath> {
