@@ -1,5 +1,7 @@
 //! Types for the vulnerability reachability API.
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
 /// Identified import vulnerability.
@@ -40,4 +42,23 @@ pub struct Callsite {
     pub start: (usize, usize),
     pub end: (usize, usize),
     pub text: String,
+}
+
+/// A reachability analysis job.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct Job {
+    /// Job ID for the Phylum issue analysis.
+    pub analysis_job_id: String,
+    /// The list of transitive dependencies for the user's project.
+    pub dependencies: HashSet<JobPackage>,
+    /// The list of packages directly imported by the user.
+    pub imported_packages: HashSet<String>,
+}
+
+/// A globally unique package.
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Debug)]
+pub struct JobPackage {
+    pub name: String,
+    pub version: String,
+    pub ecosystem: String,
 }
