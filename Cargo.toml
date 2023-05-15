@@ -3,4 +3,8 @@ resolver = "2"
 members = [
   "vuln-reach",
   "vuln-reach-cli",
+  "vulnreach_types",
 ]
+
+[workspace.package]
+rust-version = "1.65.0"
