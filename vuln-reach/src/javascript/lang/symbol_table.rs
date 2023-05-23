@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use tree_sitter::{Node, QueryCursor};
 
-use crate::javascript::common::parent_iterator;
+use crate::javascript::common::{parent_iterator, NodeIterator};
 use crate::Tree;
 
 // A (lexical) scope.
@@ -110,11 +110,12 @@ impl<'a> SymbolTableBuilder<'a> {
                 // Statement block and program nodes are the only node types
                 // that create a new scope.
                 self.push_scope(node);
-                if let Some(params) = node.prev_named_sibling() {
-                    if params.kind() == "formal_parameters" {
-                        self.visit(params);
-                    }
+                if let Some(params) = NodeIterator::new(node, |node| node.prev_named_sibling())
+                    .find(|node| node.kind() == "formal_parameters")
+                {
+                    self.visit(params);
                 }
+
                 self.visit_children(node);
                 self.pop_scope();
             },
@@ -392,6 +393,23 @@ mod tests {
                     }
                 }
             }
+            "#
+            .to_string(),
+        )
+        .unwrap();
+
+        let st = SymbolTable::new(&tree);
+        st.pretty_display();
+    }
+
+    // Test the uncommon (but valid) situation in which there is a comment between
+    // a formal parameter list and a function body.
+    #[test]
+    fn test_formal_param_comment() {
+        let tree = Tree::new(
+            r#"
+            function fn1(arg1, arg2) {}
+            function fn2(arg1, arg2) /* comment */ {}
             "#
             .to_string(),
         )
