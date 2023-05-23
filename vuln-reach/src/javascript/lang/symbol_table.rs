@@ -266,11 +266,20 @@ impl<'a> SymbolTable<'a> {
             // If formal_parameters nodes has a statement_block next sibling, it is a
             // regular function, otherwise it is an arrow function and the
             // identifier doesn't belong to a scope.
-            let body = parent.parent().unwrap().child_by_field_name("body").unwrap();
+            let function_decl = parent.parent().expect("formal_parameters node must have a parent");
+            let body = function_decl
+                .child_by_field_name("body")
+                .expect("formal_parameter parent must have a statement_block named `body`");
+
             if body.kind() == "statement_block" {
                 let scope_index = *self.scope_indices.get(&body).unwrap();
                 let scope = &self.scopes[scope_index];
-                assert!(scope.names.iter().any(|&node| self.tree.repr_of(node) == name));
+                assert!(
+                    scope.names.iter().any(|&node| self.tree.repr_of(node) == name),
+                    "Identifier {name} not found in scope ({:?}). Function:\n\n{}",
+                    scope.names,
+                    self.tree.repr_of(function_decl)
+                );
                 return Some((scope, node));
             }
         }
