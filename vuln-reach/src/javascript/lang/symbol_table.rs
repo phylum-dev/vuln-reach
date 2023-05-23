@@ -263,8 +263,8 @@ impl<'a> SymbolTable<'a> {
         // scope is in the sibling "body" field block.
         let parent = node.parent().unwrap();
         if parent.kind() == "formal_parameters" {
-            // If formal_parameters nodes has a statement_block next sibling, it is a
-            // regular function, otherwise it is an arrow function and the
+            // If formal_parameters nodes has a statement_block among its later siblings, it
+            // is a regular function, otherwise it is an arrow function and the
             // identifier doesn't belong to a scope.
             let function_decl = parent.parent().expect("formal_parameters node must have a parent");
             let body = function_decl
