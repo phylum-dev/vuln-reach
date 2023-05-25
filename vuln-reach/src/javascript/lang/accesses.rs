@@ -87,16 +87,23 @@ impl<'a> AccessGraph<'a> {
                 // The node is the first capture of the query, and it's always present.
                 let node = query_match.captures[0].node;
 
+                // TODO: This seems to have negligible performance impact.
+                //  => Create some sort of `TreeCursorBuilder` which caches the origin point of
+                //  cursors and allows faster creation for commonly used nodes?
+                //
+                // Create cursors ahead of time since clone is faster than `Cursor::new`.
+                let mut scope_cursor = Cursor::new(tree, node).unwrap();
+                let decl_cursor = scope_cursor.clone();
+
                 // Find the scope this node belongs to.
-                let mut cursor = Cursor::new(tree, node).unwrap();
                 let scope = loop {
-                    let node = cursor.goto_parent().unwrap();
+                    let node = scope_cursor.goto_parent().unwrap();
 
                     let kind = node.kind();
                     if kind == "program"
                         || (kind == "statement_block"
-                            && cursor
-                                .goto_parent()
+                            && scope_cursor
+                                .peek_parent()
                                 .and_then(|parent| parent.child_by_field_name("body"))
                                 .is_some())
                     {
@@ -105,8 +112,7 @@ impl<'a> AccessGraph<'a> {
                 };
 
                 // Get the declaration scope by looking up the node in the symbol table.
-                let cursor = Cursor::new(tree, node).unwrap();
-                let (decl_scope, decl_node) = symbol_table.lookup(cursor)?;
+                let (decl_scope, decl_node) = symbol_table.lookup(decl_cursor)?;
 
                 let decl_scope = decl_scope.node();
 
@@ -151,29 +157,39 @@ impl<'a> AccessGraph<'a> {
         tree: &'a Tree,
         node: Node<'a>,
     ) -> Option<Node<'a>> {
+        // TODO: This seems to have negligible performance impact.
+        //
+        // Create cursors ahead of time since clone is faster than `Cursor::new`.
+        let mut parent_cursor = Cursor::new(tree, node).unwrap();
+        let lhs_rhs_cursor = parent_cursor.clone();
+
         // Determine the scope the identifier is in.
-        let cursor = Cursor::new(tree, node).unwrap();
-        let parent_scope = cursor.parents().find(|&node| {
-            let mut cursor = Cursor::new(tree, node).unwrap();
-            cursor.goto_parent().map_or(false, |p| p.child_by_field_name("body") == Some(node))
+        let mut parent_scope = None;
+        while let Some(node) = parent_cursor.goto_parent() {
+            if parent_cursor
+                .peek_parent()
+                .map_or(false, |parent| parent.child_by_field_name("body") == Some(node))
                 && symbol_table.get_scope(node).is_some()
-        });
+            {
+                parent_scope = Some(node);
+                break;
+            }
+        }
 
         // Class declaration identifiers
-        if let Some(accessor) = parent_scope
-            .and_then(|scope| {
-                let cursor = Cursor::new(tree, scope).unwrap();
-                cursor.parents().find(|node| node.kind() == "class_declaration")
-            })
-            .and_then(|class_decl| class_decl.child_by_field_name("name"))
-        {
+        if let Some(accessor) = parent_scope.and_then(|scope| {
+            // TODO: Slightly dangerous, we're reusing a mutable cursor here.
+            let cursor = parent_cursor.clone();
+            let class_decl = cursor.parents().find(|node| node.kind() == "class_declaration")?;
+            class_decl.child_by_field_name("name")
+        }) {
             return Some(accessor);
         }
 
         // Function calls
         if let Some(accessor) = parent_scope
-            .and_then(|scope| Cursor::new(tree, scope).unwrap().goto_parent())
-            .and_then(|maybe_func| maybe_func.child_by_field_name(b"name"))
+            // TODO: Slightly dangerous, we're reusing a mutable cursor here.
+            .and_then(|_| parent_cursor.peek_parent()?.child_by_field_name(b"name"))
             .filter(|accessor| accessor.kind() == "identifier")
         {
             return Some(accessor);
@@ -185,8 +201,7 @@ impl<'a> AccessGraph<'a> {
         }
 
         // LHS/RHS expressions
-        let cursor = Cursor::new(tree, node).unwrap();
-        if let Some(expr) = cursor.parents().find(|node| {
+        if let Some(expr) = lhs_rhs_cursor.parents().find(|node| {
             matches!(node.kind(), "assignment_expression" | "augmented_assignment_expression")
         }) {
             let lhs = expr.child_by_field_name(b"left").unwrap();

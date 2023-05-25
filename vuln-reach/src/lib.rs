@@ -101,8 +101,11 @@ impl DerefMut for Tree {
     }
 }
 
+/// TODO: Doc
+#[derive(Clone)]
 pub struct Cursor<'a> {
     cursor: TreeCursor<'a>,
+    child: Option<Node<'a>>,
 }
 
 impl<'a> Cursor<'a> {
@@ -122,17 +125,36 @@ impl<'a> Cursor<'a> {
             }
         }
 
-        Ok(Self { cursor })
+        Ok(Self { cursor, child: None })
     }
 
     /// Move the cursor to the parent node.
     pub fn goto_parent(&mut self) -> Option<Node<'a>> {
-        self.cursor.goto_parent().then(|| self.cursor.node())
+        if self.child.take().is_none() && !self.cursor.goto_parent() {
+            return None;
+        }
+
+        Some(self.cursor.node())
+    }
+
+    /// Peek at the node's parent.
+    pub fn peek_parent(&mut self) -> Option<Node<'a>> {
+        // If we've peeked before, just return the cursor's head.
+        let node = self.cursor.node();
+        if self.child.is_some() {
+            return Some(node);
+        }
+
+        // Move cursor to the parent and store our child.
+        let parent = self.goto_parent()?;
+        self.child = Some(node);
+
+        Some(parent)
     }
 
     /// Get the cursor's current node.
     pub fn node(&self) -> Node<'a> {
-        self.cursor.node()
+        self.child.unwrap_or_else(|| self.cursor.node())
     }
 
     /// Get an iterator from the cursor's current node to the tree root.
