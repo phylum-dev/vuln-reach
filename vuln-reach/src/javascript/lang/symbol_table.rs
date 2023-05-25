@@ -4,8 +4,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use tree_sitter::{Node, QueryCursor};
 
-use crate::javascript::common::parent_iterator;
-use crate::Tree;
+use crate::{Cursor, Tree};
 
 // A (lexical) scope.
 #[derive(Debug)]
@@ -250,8 +249,9 @@ impl<'a> SymbolTable<'a> {
 
     /// Lookup an identifier. Returns the scope in which it is defined, and the
     /// node at which it is declared.
-    pub fn lookup(&self, node: Node<'a>) -> Option<(&Scope<'a>, Node<'a>)> {
+    pub fn lookup(&self, mut cursor: Cursor<'a>) -> Option<(&Scope<'a>, Node<'a>)> {
         // Skip lookup if the node is not an identifier.
+        let node = cursor.node();
         if node.kind() != "identifier" {
             return None;
         }
@@ -260,7 +260,7 @@ impl<'a> SymbolTable<'a> {
 
         // If the identifier is in a formal parameters list, the declaration
         // scope is in the sibling "body" field block.
-        let parent = node.parent().unwrap();
+        let mut parent = cursor.goto_parent().unwrap();
         if parent.kind() == "formal_parameters" {
             // If formal_parameters nodes has a statement_block next sibling, it is a
             // regular function, otherwise it is an arrow function and the
@@ -276,9 +276,13 @@ impl<'a> SymbolTable<'a> {
 
         // Find parent scope node. Guaranteed to exist: "program" is the topmost and
         // worst case.
-        let parent_scope_node = parent_iterator(node)
-            .find(|n| matches!(n.kind(), "statement_block" | "program"))
-            .unwrap();
+        let parent_scope_node = loop {
+            if matches!(parent.kind(), "statement_block" | "program") {
+                break parent;
+            }
+
+            parent = cursor.goto_parent().unwrap();
+        };
 
         // Find the parent scope (where the identifier is used).
         //
@@ -328,8 +332,9 @@ impl<'a> SymbolTable<'a> {
             .matches(&query, self.tree.root_node(), self.tree.buf().as_bytes())
             .map(|query_match| {
                 let node = query_match.captures[0].node;
+                let cursor = Cursor::new(self.tree, node).unwrap();
                 let scope_index = self
-                    .lookup(node)
+                    .lookup(cursor)
                     .map(|(scope, _)| *self.scope_indices.get(&scope.node).unwrap());
                 (node, scope_index)
             })

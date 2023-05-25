@@ -5,8 +5,7 @@ use lazy_static::lazy_static;
 use tree_sitter::{Node, Query, QueryCursor};
 
 use super::symbol_table::SymbolTable;
-use crate::javascript::common::parent_iterator;
-use crate::{Error, Result, Tree, JS};
+use crate::{Cursor, Error, Result, Tree, JS};
 
 /// An instance of a variable access (call or right-hand assignment).
 /// Represents an edge from the access scope to the declaration scope.
@@ -88,24 +87,36 @@ impl<'a> AccessGraph<'a> {
                 // The node is the first capture of the query, and it's always present.
                 let node = query_match.captures[0].node;
 
-                // Find the scope the node belongs to.
-                let scope = parent_iterator(node)
-                    .find(|n| {
-                        n.kind() == "program"
-                            || (n.kind() == "statement_block"
-                                && n.parent()
-                                    .map_or(false, |p| p.child_by_field_name("body").is_some()))
+                // Find the scope this node belongs to.
+                let cursor = Cursor::new(tree, node).unwrap();
+                let scope = cursor
+                    .parents()
+                    .find(|node| {
+                        if node.kind() == "program" {
+                            return true;
+                        }
+
+                        // TODO: Do not construct a new cursor here, for it is shit.
+                        let mut cursor = Cursor::new(tree, *node).unwrap();
+                        cursor
+                            .goto_parent()
+                            .and_then(|parent| parent.child_by_field_name("body"))
+                            .is_some()
                     })
                     .unwrap();
 
                 // Get the declaration scope by looking up the node in the symbol table.
-                let (decl_scope, decl_node) = symbol_table.lookup(node)?;
+                let cursor = Cursor::new(tree, node).unwrap();
+                let (decl_scope, decl_node) = symbol_table.lookup(cursor)?;
 
                 let decl_scope = decl_scope.node();
 
                 // Get the accessor as defined by the method.
-                let accessor = AccessGraph::find_accessor(symbol_table, node)
-                    .and_then(|node| symbol_table.lookup(node))
+                let accessor = AccessGraph::find_accessor(symbol_table, tree, node)
+                    .and_then(|node| {
+                        let cursor = Cursor::new(tree, node).ok()?;
+                        symbol_table.lookup(cursor)
+                    })
                     .map(|(_, accessor)| accessor);
 
                 Some(Access { node, scope, decl_node, decl_scope, accessor })
@@ -136,9 +147,14 @@ impl<'a> AccessGraph<'a> {
     //
     // This is a good spot to improve, but requires deeply thinking about
     // use cases, as "access" does not have a well-defined meaning statically.
-    fn find_accessor(symbol_table: &SymbolTable<'a>, node: Node<'a>) -> Option<Node<'a>> {
+    fn find_accessor(
+        symbol_table: &SymbolTable<'a>,
+        tree: &'a Tree,
+        node: Node<'a>,
+    ) -> Option<Node<'a>> {
         // Determine the scope the identifier is in.
-        let parent_scope = parent_iterator(node).find(|&node| {
+        let cursor = Cursor::new(tree, node).unwrap();
+        let parent_scope = cursor.parents().find(|&node| {
             node.parent().map_or(false, |p| p.child_by_field_name("body") == Some(node))
                 && symbol_table.get_scope(node).is_some()
         });
@@ -146,7 +162,8 @@ impl<'a> AccessGraph<'a> {
         // Class declaration identifiers
         if let Some(accessor) = parent_scope
             .and_then(|scope| {
-                parent_iterator(scope).find(|node| node.kind() == "class_declaration")
+                let cursor = Cursor::new(tree, scope).unwrap();
+                cursor.parents().find(|node| node.kind() == "class_declaration")
             })
             .and_then(|class_decl| class_decl.child_by_field_name("name"))
         {
@@ -168,7 +185,8 @@ impl<'a> AccessGraph<'a> {
         }
 
         // LHS/RHS expressions
-        if let Some(expr) = parent_iterator(node).find(|node| {
+        let cursor = Cursor::new(tree, node).unwrap();
+        if let Some(expr) = cursor.parents().find(|node| {
             matches!(node.kind(), "assignment_expression" | "augmented_assignment_expression")
         }) {
             let lhs = expr.child_by_field_name(b"left").unwrap();

@@ -1,0 +1,9 @@
+[package]
+name = "bench"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vuln-reach = { path = "../vuln-reach" }
+tokio = { version = "1.28.1", features = ["macros", "rt-multi-thread"] }
+reqwest = "0.11.18"

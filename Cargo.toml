@@ -3,4 +3,5 @@ resolver = "2"
 members = [
   "vuln-reach",
   "vuln-reach-cli",
+  "bench",
 ]

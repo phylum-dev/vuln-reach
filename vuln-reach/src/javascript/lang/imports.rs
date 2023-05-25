@@ -6,8 +6,7 @@ use std::ops::Deref;
 use lazy_static::lazy_static;
 use tree_sitter::{Node, Query, QueryCursor};
 
-use crate::javascript::common::parent_iterator;
-use crate::{Error, Tree, JS};
+use crate::{Error, Tree, JS, Cursor};
 
 // CommonJS
 //
@@ -61,8 +60,10 @@ impl<'a> CommonJsImport<'a> {
     /// ```js
     /// const foo = require('bar')
     /// ```
-    pub fn access_node(&self) -> Node<'a> {
-        parent_iterator(self.node)
+    pub fn access_node(&self, tree: &'a Tree) -> Node<'a> {
+        let cursor = Cursor::new(tree, self.node).unwrap();
+        cursor
+            .parents()
             .find_map(|node| match node.kind() {
                 "assignment_expression" | "augmented_assignment_expression" => {
                     node.child_by_field_name("left")

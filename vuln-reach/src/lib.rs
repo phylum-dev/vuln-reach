@@ -3,7 +3,9 @@ use std::ops::{Deref, DerefMut};
 
 use lazy_static::lazy_static;
 use thiserror::Error;
-use tree_sitter::{Language, LanguageError, Node, Parser, Query, QueryError, Tree as TsTree};
+use tree_sitter::{
+    Language, LanguageError, Node, Parser, Query, QueryError, Tree as TsTree, TreeCursor,
+};
 
 pub mod javascript;
 pub mod util;
@@ -34,6 +36,8 @@ pub enum Error {
     IoError(#[from] io::Error),
     #[error("generic")]
     Generic(String),
+    #[error("node does not exist in tree")]
+    InvalidNode,
 }
 
 impl From<String> for Error {
@@ -94,5 +98,57 @@ impl Deref for Tree {
 impl DerefMut for Tree {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.tree
+    }
+}
+
+pub struct Cursor<'a> {
+    cursor: TreeCursor<'a>,
+}
+
+impl<'a> Cursor<'a> {
+    /// Construct a new cursor and move it to the `node`.
+    pub fn new(tree: &'a Tree, node: Node<'a>) -> Result<Self> {
+        // Start cursor at the root, so we know all parents.
+        let mut cursor = tree.root_node().walk();
+
+        // Iterate through children until we've found the desired node.
+        while node != cursor.node() {
+            let node_end = node.byte_range().end;
+            let child_offset = cursor.goto_first_child_for_byte(node_end);
+
+            // Child does not exist in the tree.
+            if child_offset.is_none() {
+                return Err(Error::InvalidNode);
+            }
+        }
+
+        Ok(Self { cursor })
+    }
+
+    /// Move the cursor to the parent node.
+    pub fn goto_parent(&mut self) -> Option<Node<'a>> {
+        self.cursor.goto_parent().then(|| self.cursor.node())
+    }
+
+    /// Get the cursor's current node.
+    pub fn node(&self) -> Node<'a> {
+        self.cursor.node()
+    }
+
+    /// Get an iterator from the cursor's current node to the tree root.
+    pub fn parents(self) -> ParentIterator<'a> {
+        ParentIterator { cursor: self }
+    }
+}
+
+pub struct ParentIterator<'a> {
+    cursor: Cursor<'a>,
+}
+
+impl<'a> Iterator for ParentIterator<'a> {
+    type Item = Node<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.cursor.goto_parent()
     }
 }
