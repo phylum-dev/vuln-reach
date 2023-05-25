@@ -88,22 +88,21 @@ impl<'a> AccessGraph<'a> {
                 let node = query_match.captures[0].node;
 
                 // Find the scope this node belongs to.
-                let cursor = Cursor::new(tree, node).unwrap();
-                let scope = cursor
-                    .parents()
-                    .find(|node| {
-                        if node.kind() == "program" {
-                            return true;
-                        }
+                let mut cursor = Cursor::new(tree, node).unwrap();
+                let scope = loop {
+                    let node = cursor.goto_parent().unwrap();
 
-                        // TODO: Do not construct a new cursor here, for it is shit.
-                        let mut cursor = Cursor::new(tree, *node).unwrap();
-                        cursor
-                            .goto_parent()
-                            .and_then(|parent| parent.child_by_field_name("body"))
-                            .is_some()
-                    })
-                    .unwrap();
+                    let kind = node.kind();
+                    if kind == "program"
+                        || (kind == "statement_block"
+                            && cursor
+                                .goto_parent()
+                                .and_then(|parent| parent.child_by_field_name("body"))
+                                .is_some())
+                    {
+                        break node;
+                    }
+                };
 
                 // Get the declaration scope by looking up the node in the symbol table.
                 let cursor = Cursor::new(tree, node).unwrap();
@@ -155,7 +154,8 @@ impl<'a> AccessGraph<'a> {
         // Determine the scope the identifier is in.
         let cursor = Cursor::new(tree, node).unwrap();
         let parent_scope = cursor.parents().find(|&node| {
-            node.parent().map_or(false, |p| p.child_by_field_name("body") == Some(node))
+            let mut cursor = Cursor::new(tree, node).unwrap();
+            cursor.goto_parent().map_or(false, |p| p.child_by_field_name("body") == Some(node))
                 && symbol_table.get_scope(node).is_some()
         });
 
@@ -172,7 +172,7 @@ impl<'a> AccessGraph<'a> {
 
         // Function calls
         if let Some(accessor) = parent_scope
-            .and_then(|scope| scope.parent())
+            .and_then(|scope| Cursor::new(tree, scope).unwrap().goto_parent())
             .and_then(|maybe_func| maybe_func.child_by_field_name(b"name"))
             .filter(|accessor| accessor.kind() == "identifier")
         {
@@ -259,8 +259,12 @@ impl<'a> AccessGraph<'a> {
                 }
 
                 if let Some(accessor) = declaration_access.accessor.filter(|node| {
-                    node.kind() == "identifier"
-                        && node.parent().map_or(false, |n| n.kind() != "formal_parameters")
+                    if node.kind() != "identifier" {
+                        return false;
+                    }
+
+                    let mut cursor = Cursor::new(self.tree, *node).unwrap();
+                    cursor.goto_parent().map_or(false, |node| node.kind() != "formal_parameters")
                 }) {
                     bfs_q.push_back((accessor, path));
                 }
