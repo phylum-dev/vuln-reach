@@ -1,6 +1,8 @@
 use vuln_reach::javascript::package::Package;
 
-const PACKAGE_URI: &str = "https://registry.npmjs.org/mongoose/-/mongoose-7.2.1.tgz";
+// https://registry.npmjs.org/mongoose/-/mongoose-7.2.1.tgz
+// https://registry.npmjs.org/codemirror/-/codemirror-5.5.0.tgz
+const PACKAGE_URI: &str = "https://registry.npmjs.org/codemirror/-/codemirror-5.5.0.tgz";
 
 #[tokio::main]
 async fn main() {

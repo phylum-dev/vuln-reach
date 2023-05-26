@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use tree_sitter::{Node, Query, QueryCursor};
 
 use super::symbol_table::SymbolTable;
-use crate::{Cursor, Error, Result, Tree, JS};
+use crate::{Cursor, Error, Result, Tree, TreeCursorCache, JS};
 
 /// An instance of a variable access (call or right-hand assignment).
 /// Represents an edge from the access scope to the declaration scope.
@@ -80,6 +80,8 @@ impl<'a> AccessGraph<'a> {
             static ref QUERY: Query = Query::new(*JS, "(identifier) @ident").unwrap();
         }
 
+        let mut cursor_cache = TreeCursorCache::new(tree);
+
         let mut cur = QueryCursor::new();
         let accesses = cur
             .matches(&QUERY, tree.root_node(), tree.buf().as_bytes())
@@ -87,15 +89,8 @@ impl<'a> AccessGraph<'a> {
                 // The node is the first capture of the query, and it's always present.
                 let node = query_match.captures[0].node;
 
-                // TODO: This seems to have negligible performance impact.
-                //  => Create some sort of `TreeCursorBuilder` which caches the origin point of
-                //  cursors and allows faster creation for commonly used nodes?
-                //
-                // Create cursors ahead of time since clone is faster than `Cursor::new`.
-                let mut scope_cursor = Cursor::new(tree, node).unwrap();
-                let decl_cursor = scope_cursor.clone();
-
                 // Find the scope this node belongs to.
+                let mut scope_cursor = cursor_cache.cursor(node).unwrap();
                 let scope = loop {
                     let node = scope_cursor.goto_parent().unwrap();
 
@@ -103,7 +98,7 @@ impl<'a> AccessGraph<'a> {
                     if kind == "program"
                         || (kind == "statement_block"
                             && scope_cursor
-                                .peek_parent()
+                                .parent()
                                 .and_then(|parent| parent.child_by_field_name("body"))
                                 .is_some())
                     {
@@ -112,14 +107,15 @@ impl<'a> AccessGraph<'a> {
                 };
 
                 // Get the declaration scope by looking up the node in the symbol table.
+                let decl_cursor = cursor_cache.cursor(node).unwrap();
                 let (decl_scope, decl_node) = symbol_table.lookup(decl_cursor)?;
 
                 let decl_scope = decl_scope.node();
 
                 // Get the accessor as defined by the method.
-                let accessor = AccessGraph::find_accessor(symbol_table, tree, node)
+                let accessor = AccessGraph::find_accessor(symbol_table, &mut cursor_cache, node)
                     .and_then(|node| {
-                        let cursor = Cursor::new(tree, node).ok()?;
+                        let cursor = cursor_cache.cursor(node).ok()?;
                         symbol_table.lookup(cursor)
                     })
                     .map(|(_, accessor)| accessor);
@@ -154,20 +150,15 @@ impl<'a> AccessGraph<'a> {
     // use cases, as "access" does not have a well-defined meaning statically.
     fn find_accessor(
         symbol_table: &SymbolTable<'a>,
-        tree: &'a Tree,
+        cursor_cache: &mut TreeCursorCache<'a>,
         node: Node<'a>,
     ) -> Option<Node<'a>> {
-        // TODO: This seems to have negligible performance impact.
-        //
-        // Create cursors ahead of time since clone is faster than `Cursor::new`.
-        let mut parent_cursor = Cursor::new(tree, node).unwrap();
-        let lhs_rhs_cursor = parent_cursor.clone();
-
         // Determine the scope the identifier is in.
+        let mut parent_cursor = cursor_cache.cursor(node).unwrap();
         let mut parent_scope = None;
         while let Some(node) = parent_cursor.goto_parent() {
             if parent_cursor
-                .peek_parent()
+                .parent()
                 .map_or(false, |parent| parent.child_by_field_name("body") == Some(node))
                 && symbol_table.get_scope(node).is_some()
             {
@@ -178,8 +169,7 @@ impl<'a> AccessGraph<'a> {
 
         // Class declaration identifiers
         if let Some(accessor) = parent_scope.and_then(|scope| {
-            // TODO: Slightly dangerous, we're reusing a mutable cursor here.
-            let cursor = parent_cursor.clone();
+            let cursor = cursor_cache.cursor(scope).ok()?;
             let class_decl = cursor.parents().find(|node| node.kind() == "class_declaration")?;
             class_decl.child_by_field_name("name")
         }) {
@@ -188,8 +178,7 @@ impl<'a> AccessGraph<'a> {
 
         // Function calls
         if let Some(accessor) = parent_scope
-            // TODO: Slightly dangerous, we're reusing a mutable cursor here.
-            .and_then(|_| parent_cursor.peek_parent()?.child_by_field_name(b"name"))
+            .and_then(|node| cursor_cache.cursor(node).ok()?.parent()?.child_by_field_name(b"name"))
             .filter(|accessor| accessor.kind() == "identifier")
         {
             return Some(accessor);
@@ -201,6 +190,7 @@ impl<'a> AccessGraph<'a> {
         }
 
         // LHS/RHS expressions
+        let lhs_rhs_cursor = cursor_cache.cursor(node).unwrap();
         if let Some(expr) = lhs_rhs_cursor.parents().find(|node| {
             matches!(node.kind(), "assignment_expression" | "augmented_assignment_expression")
         }) {

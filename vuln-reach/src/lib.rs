@@ -1,11 +1,10 @@
+use std::collections::HashMap;
 use std::io;
 use std::ops::{Deref, DerefMut};
 
 use lazy_static::lazy_static;
 use thiserror::Error;
-use tree_sitter::{
-    Language, LanguageError, Node, Parser, Query, QueryError, Tree as TsTree, TreeCursor,
-};
+use tree_sitter::{Language, LanguageError, Node, Parser, Query, QueryError, Tree as TsTree};
 
 pub mod javascript;
 pub mod util;
@@ -101,60 +100,76 @@ impl DerefMut for Tree {
     }
 }
 
-/// TODO: Doc
+/// Cache for fast duplication of previously used cursors.
+pub struct TreeCursorCache<'a> {
+    cursors: HashMap<Node<'a>, Cursor<'a>>,
+    tree: &'a Tree,
+}
+
+impl<'a> TreeCursorCache<'a> {
+    fn new(tree: &'a Tree) -> Self {
+        Self { tree, cursors: HashMap::new() }
+    }
+
+    fn cursor(&mut self, node: Node<'a>) -> Result<Cursor<'a>> {
+        match self.cursors.get(&node) {
+            Some(cursor) => Ok(cursor.clone()),
+            None => {
+                let cursor = Cursor::new(self.tree, node)?;
+                self.cursors.insert(node, cursor.clone());
+                Ok(cursor)
+            },
+        }
+    }
+}
+
+/// Cursor for upwards traversal of a [`treesitter::Tree`].
 #[derive(Clone)]
 pub struct Cursor<'a> {
-    cursor: TreeCursor<'a>,
-    child: Option<Node<'a>>,
+    nodes: Vec<Node<'a>>,
 }
 
 impl<'a> Cursor<'a> {
     /// Construct a new cursor and move it to the `node`.
     pub fn new(tree: &'a Tree, node: Node<'a>) -> Result<Self> {
+        let mut nodes = Vec::new();
+
         // Start cursor at the root, so we know all parents.
         let mut cursor = tree.root_node().walk();
+        nodes.push(cursor.node());
 
         // Iterate through children until we've found the desired node.
-        while node != cursor.node() {
-            let node_end = node.byte_range().end;
+        let node_end = node.end_byte();
+        while node != nodes[nodes.len() - 1] {
             let child_offset = cursor.goto_first_child_for_byte(node_end);
 
             // Child does not exist in the tree.
             if child_offset.is_none() {
                 return Err(Error::InvalidNode);
             }
+
+            nodes.push(cursor.node());
         }
 
-        Ok(Self { cursor, child: None })
+        Ok(Self { nodes })
     }
 
     /// Move the cursor to the parent node.
     pub fn goto_parent(&mut self) -> Option<Node<'a>> {
-        if self.child.take().is_none() && !self.cursor.goto_parent() {
-            return None;
-        }
-
-        Some(self.cursor.node())
-    }
-
-    /// Peek at the node's parent.
-    pub fn peek_parent(&mut self) -> Option<Node<'a>> {
-        // If we've peeked before, just return the cursor's head.
-        let node = self.cursor.node();
-        if self.child.is_some() {
-            return Some(node);
-        }
-
-        // Move cursor to the parent and store our child.
-        let parent = self.goto_parent()?;
-        self.child = Some(node);
-
-        Some(parent)
+        (self.nodes.len() > 1).then(|| {
+            self.nodes.pop();
+            self.node()
+        })
     }
 
     /// Get the cursor's current node.
     pub fn node(&self) -> Node<'a> {
-        self.child.unwrap_or_else(|| self.cursor.node())
+        self.nodes[self.nodes.len() - 1]
+    }
+
+    /// Get the node's parent.
+    pub fn parent(&mut self) -> Option<Node<'a>> {
+        (self.nodes.len() > 1).then(|| self.nodes[self.nodes.len() - 2])
     }
 
     /// Get an iterator from the cursor's current node to the tree root.
