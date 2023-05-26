@@ -76,6 +76,11 @@ impl ModuleCache {
                 Err(_) => continue,
             };
 
+            // Skip modules we've already loaded.
+            if cache.contains_key(&absolute_spec.to_path_buf()) {
+                continue;
+            }
+
             // Lookup (or load) module.
             let module = match resolver.load(&absolute_spec) {
                 Ok(module) => module,
