@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
@@ -76,15 +77,17 @@ impl ModuleCache {
                 Err(_) => continue,
             };
 
-            // Skip modules we've already loaded.
-            if cache.contains_key(&absolute_spec.to_path_buf()) {
-                continue;
-            }
-
-            // Lookup (or load) module.
-            let module = match resolver.load(&absolute_spec) {
-                Ok(module) => module,
-                Err(_) => continue,
+            // Load modules into cache on demand.
+            let module = match cache.entry(absolute_spec.clone()) {
+                Entry::Occupied(module) => module.into_mut(),
+                Entry::Vacant(vacant) => {
+                    // Load a new module.
+                    let module = match resolver.load(&absolute_spec) {
+                        Ok(module) => module,
+                        Err(_) => continue,
+                    };
+                    vacant.insert(module)
+                },
             };
 
             // Only process import sources now.
@@ -101,8 +104,6 @@ impl ModuleCache {
                 },
                 Imports::None => {},
             }
-
-            cache.insert(absolute_spec.to_path_buf(), module);
 
             // Insert an edge to the import in the base module's adjacency list.
             if let Some(current_module) = current_module_spec {
