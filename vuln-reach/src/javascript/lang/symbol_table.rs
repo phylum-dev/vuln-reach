@@ -110,17 +110,13 @@ impl<'a> SymbolTableBuilder<'a> {
                 // that create a new scope.
                 self.push_scope(node);
 
-                let mut cur_node = node;
-                loop {
-                    cur_node = match cur_node.prev_named_sibling() {
-                        Some(node) => {
-                            if node.kind() == "formal_parameters" {
-                                self.visit(node);
-                            }
-                            node
-                        },
-                        None => break,
+                let mut cur_node = Some(node);
+
+                while let Some(node) = cur_node {
+                    if node.kind() == "formal_parameters" {
+                        self.visit(node);
                     }
+                    cur_node = node.prev_named_sibling();
                 }
 
                 self.visit_children(node);
