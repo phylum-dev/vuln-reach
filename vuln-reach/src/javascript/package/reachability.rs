@@ -65,7 +65,7 @@ fn identify_import_nodes<'a, R: ModuleResolver>(
 
                 resolve_path(resolved_spec, |spec| spec == imported_spec_abs).is_some()
             })
-            .map(|cjs_import| cjs_import.access_node())
+            .map(|cjs_import| cjs_import.access_node(dependent_module.tree()))
             .filter(|node| node.kind() == "identifier")
             .collect(),
         Imports::None => Vec::new(),

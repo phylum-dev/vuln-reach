@@ -332,8 +332,12 @@ impl<R: ModuleResolver> Project<R> {
                         }
                     },
                     Imports::CommonJs(imports) => {
+                        let module = package.cache().module(module_spec).unwrap();
+                        let tree = module.tree();
+
                         for import in imports {
-                            link_exports(None, import.source(), import.access_node());
+                            let access_node = import.access_node(tree);
+                            link_exports(None, import.source(), access_node);
                         }
                     },
                     Imports::None => {},

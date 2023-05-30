@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io;
 use std::ops::{Deref, DerefMut};
 
@@ -34,6 +35,8 @@ pub enum Error {
     IoError(#[from] io::Error),
     #[error("generic")]
     Generic(String),
+    #[error("node does not exist in tree")]
+    InvalidNode,
 }
 
 impl From<String> for Error {
@@ -94,5 +97,95 @@ impl Deref for Tree {
 impl DerefMut for Tree {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.tree
+    }
+}
+
+/// Cache for fast duplication of previously used cursors.
+pub struct TreeCursorCache<'a> {
+    cursors: HashMap<Node<'a>, Cursor<'a>>,
+    tree: &'a Tree,
+}
+
+impl<'a> TreeCursorCache<'a> {
+    fn new(tree: &'a Tree) -> Self {
+        Self { tree, cursors: HashMap::new() }
+    }
+
+    fn cursor(&mut self, node: Node<'a>) -> Result<Cursor<'a>> {
+        match self.cursors.get(&node) {
+            Some(cursor) => Ok(cursor.clone()),
+            None => {
+                let cursor = Cursor::new(self.tree, node)?;
+                self.cursors.insert(node, cursor.clone());
+                Ok(cursor)
+            },
+        }
+    }
+}
+
+/// Cursor for upwards traversal of a [`treesitter::Tree`].
+#[derive(Clone)]
+pub struct Cursor<'a> {
+    nodes: Vec<Node<'a>>,
+}
+
+impl<'a> Cursor<'a> {
+    /// Construct a new cursor and move it to the `node`.
+    pub fn new(tree: &'a Tree, node: Node<'a>) -> Result<Self> {
+        let mut nodes = Vec::new();
+
+        // Start cursor at the root, so we know all parents.
+        let mut cursor = tree.root_node().walk();
+        nodes.push(cursor.node());
+
+        // Iterate through children until we've found the desired node.
+        let node_end = node.end_byte();
+        while node != nodes[nodes.len() - 1] {
+            let child_offset = cursor.goto_first_child_for_byte(node_end);
+
+            // Child does not exist in the tree.
+            if child_offset.is_none() {
+                return Err(Error::InvalidNode);
+            }
+
+            nodes.push(cursor.node());
+        }
+
+        Ok(Self { nodes })
+    }
+
+    /// Move the cursor to the parent node.
+    pub fn goto_parent(&mut self) -> Option<Node<'a>> {
+        (self.nodes.len() > 1).then(|| {
+            self.nodes.pop();
+            self.node()
+        })
+    }
+
+    /// Get the cursor's current node.
+    pub fn node(&self) -> Node<'a> {
+        self.nodes[self.nodes.len() - 1]
+    }
+
+    /// Get the node's parent.
+    pub fn parent(&mut self) -> Option<Node<'a>> {
+        (self.nodes.len() > 1).then(|| self.nodes[self.nodes.len() - 2])
+    }
+
+    /// Get an iterator from the cursor's current node to the tree root.
+    pub fn parents(self) -> ParentIterator<'a> {
+        ParentIterator { cursor: self }
+    }
+}
+
+pub struct ParentIterator<'a> {
+    cursor: Cursor<'a>,
+}
+
+impl<'a> Iterator for ParentIterator<'a> {
+    type Item = Node<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.cursor.goto_parent()
     }
 }

@@ -17,14 +17,14 @@ jobs:
 
       - name: Install Rust toolchains
         run: |
-          rustup toolchain install stable --profile minimal -c clippy 
+          rustup toolchain install stable --profile minimal -c clippy
           rustup toolchain install nightly --profile minimal -c rustfmt
           rustup default stable
 
       - name: Format check
         run: cargo +nightly fmt --all -- --check
 
-      - name: Clippy 
+      - name: Clippy
         run: cargo clippy -- -D warnings
 
       - name: Tests
