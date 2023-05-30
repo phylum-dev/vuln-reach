@@ -109,11 +109,20 @@ impl<'a> SymbolTableBuilder<'a> {
                 // Statement block and program nodes are the only node types
                 // that create a new scope.
                 self.push_scope(node);
-                if let Some(params) = node.prev_named_sibling() {
-                    if params.kind() == "formal_parameters" {
-                        self.visit(params);
+
+                let mut cur_node = node;
+                loop {
+                    cur_node = match cur_node.prev_named_sibling() {
+                        Some(node) => {
+                            if node.kind() == "formal_parameters" {
+                                self.visit(node);
+                            }
+                            node
+                        },
+                        None => break,
                     }
                 }
+
                 self.visit_children(node);
                 self.pop_scope();
             },
@@ -265,7 +274,9 @@ impl<'a> SymbolTable<'a> {
             // If formal_parameters nodes has a statement_block next sibling, it is a
             // regular function, otherwise it is an arrow function and the
             // identifier doesn't belong to a scope.
-            let body = parent.parent().unwrap().child_by_field_name("body").unwrap();
+
+            let grandparent = cursor.clone().goto_parent().unwrap();
+            let body = grandparent.child_by_field_name("body").unwrap();
             if body.kind() == "statement_block" {
                 let scope_index = *self.scope_indices.get(&body).unwrap();
                 let scope = &self.scopes[scope_index];
@@ -401,6 +412,23 @@ mod tests {
             .to_string(),
         )
         .unwrap();
+
+        let st = SymbolTable::new(&tree);
+        st.pretty_display();
+    }
+
+    // Test the uncommon (but valid) situation in which there is a comment between
+    // a formal parameter list and a function body.
+    #[test]
+    fn test_formal_param_comment() {
+        let tree = Tree::new(
+            r#"
+            function fn1(arg1, arg2) {}
+            function fn2(arg1, arg2) /* comment */ {}
+            "#
+            .to_string(),
+        )
+        .expect("Should not panic");
 
         let st = SymbolTable::new(&tree);
         st.pretty_display();
