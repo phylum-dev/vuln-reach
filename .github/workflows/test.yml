@@ -15,16 +15,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - uses: webfactory/ssh-agent@v0.5.0
+        with:
+          ssh-private-key: ${{ secrets.MACHINE_USER_SSH_KEY }}
+
       - name: Install Rust toolchains
         run: |
-          rustup toolchain install stable --profile minimal -c clippy 
+          rustup toolchain install stable --profile minimal -c clippy
           rustup toolchain install nightly --profile minimal -c rustfmt
           rustup default stable
 
       - name: Format check
         run: cargo +nightly fmt --all -- --check
 
-      - name: Clippy 
+      - name: Clippy
         run: cargo clippy -- -D warnings
 
       - name: Tests
