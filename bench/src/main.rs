@@ -3,8 +3,8 @@
 use bytes::Bytes;
 use vuln_reach::javascript::module::TarballModuleResolver;
 use vuln_reach::javascript::package::Package;
-use vuln_reach_master::javascript::module::TarballModuleResolver as UpstreamTarballModuleResolver;
-use vuln_reach_master::javascript::package::Package as UpstreamPackage;
+use vuln_reach_upstream::javascript::module::TarballModuleResolver as UpstreamTarballModuleResolver;
+use vuln_reach_upstream::javascript::package::Package as UpstreamPackage;
 
 // Some useful test tarballs:
 //   https://registry.npmjs.org/core-js/-/core-js-3.30.2.tgz
