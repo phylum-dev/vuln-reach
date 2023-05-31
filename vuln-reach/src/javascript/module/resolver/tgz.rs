@@ -23,11 +23,10 @@ impl TarballModuleResolver {
             .entries()?
             .filter_map(|entry| entry.ok())
             .filter_map(|mut entry| {
+                // Skip the toplevel directory, to go to the module's root.
                 let mut path = PathBuf::from(entry.path().unwrap());
-                // Remove the leading `package/` directory which all npm modules should have.
-                if path.starts_with("package") {
-                    path = path.components().skip(1).collect();
-                }
+                path = path.components().skip(1).collect();
+
                 let mut data = Vec::new();
                 entry.read_to_end(&mut data).ok()?;
 
