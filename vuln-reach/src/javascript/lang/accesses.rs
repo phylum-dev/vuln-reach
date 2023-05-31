@@ -286,6 +286,8 @@ impl<'a> AccessGraph<'a> {
 
 #[cfg(test)]
 mod tests {
+    use tree_sitter::Point;
+
     use super::*;
 
     impl<'a> AccessEdge<'a> {
@@ -309,5 +311,18 @@ mod tests {
                 )
             }
         }
+    }
+
+    #[test]
+    fn test_try_catch_scope() {
+        let tree = Tree::new(r#"try { } catch (exception) {}"#.to_string()).unwrap();
+        let st = SymbolTable::new(&tree);
+        let accesses = AccessGraph::new(&tree, &st);
+
+        let ident = tree
+            .root_node()
+            .descendant_for_point_range(Point::new(0, 15), Point::new(0, 24))
+            .unwrap();
+        accesses.compute_paths(|access| access.node == tree.root_node(), ident).unwrap();
     }
 }

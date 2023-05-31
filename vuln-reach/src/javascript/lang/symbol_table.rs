@@ -110,7 +110,7 @@ impl<'a> SymbolTableBuilder<'a> {
                 // that create a new scope.
                 self.push_scope(node);
 
-                let mut cur_node = Some(node);
+                let mut cur_node = node.prev_named_sibling();
 
                 while let Some(node) = cur_node {
                     if node.kind() == "formal_parameters" {
