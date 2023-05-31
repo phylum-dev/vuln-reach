@@ -313,16 +313,28 @@ mod tests {
         }
     }
 
+    // Test that the identifier in a catch expression is correctly inserted into its
+    // scope.
     #[test]
     fn test_try_catch_scope() {
-        let tree = Tree::new(r#"try { } catch (exception) {}"#.to_string()).unwrap();
+        let tree = Tree::new(r#"try { } catch (exception) { exception; }"#.to_string()).unwrap();
         let st = SymbolTable::new(&tree);
         let accesses = AccessGraph::new(&tree, &st);
 
-        let ident = tree
+        // The `exception` catch parameter
+        let param = tree
             .root_node()
             .descendant_for_point_range(Point::new(0, 15), Point::new(0, 24))
             .unwrap();
-        accesses.compute_paths(|access| access.node == tree.root_node(), ident).unwrap();
+
+        // The `exception` identifier in the catch block.
+        let ident = tree
+            .root_node()
+            .descendant_for_point_range(Point::new(0, 28), Point::new(0, 36))
+            .unwrap();
+
+        let paths = accesses.compute_paths(|access| access.node == param, ident).unwrap();
+        println!("{paths:#?}");
+        assert!(!paths.is_empty());
     }
 }

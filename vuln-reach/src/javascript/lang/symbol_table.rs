@@ -171,6 +171,16 @@ impl<'a> SymbolTableBuilder<'a> {
                     scope.names.insert(parameter_name);
                 }
             },
+            "catch_clause" => {
+                // Catch clause identifier has to be registered in the child statement block.
+                if let Some(catch_statement) = node.child_by_field_name(b"body") {
+                    self.visit(catch_statement);
+                    let scope = self.scope_stack.last_mut().unwrap();
+                    if let Some(catch_param) = node.child_by_field_name(b"parameter") {
+                        scope.names.insert(catch_param);
+                    }
+                }
+            },
             "import_specifier" => {
                 // import { a, b as c } from 'foo'
                 //
