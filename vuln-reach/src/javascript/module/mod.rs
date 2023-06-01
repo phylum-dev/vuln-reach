@@ -352,4 +352,20 @@ mod tests {
             "Wrong node accessed"
         );
     }
+
+    #[test]
+    fn test_module_with_errors() {
+        let tree = Tree::new(
+            r#"
+            #[test]
+            fn test_function() {
+                panic!("I am not even JavaScript code");
+            }
+        "#
+            .to_string(),
+        )
+        .expect("The tree should be parsed anyway");
+
+        assert!(matches!(Module::try_from(tree), Err(Error::ParseError)));
+    }
 }
