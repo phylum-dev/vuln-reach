@@ -110,7 +110,7 @@ impl<'a> SymbolTableBuilder<'a> {
                 // that create a new scope.
                 self.push_scope(node);
 
-                let mut cur_node = Some(node);
+                let mut cur_node = node.prev_named_sibling();
 
                 while let Some(node) = cur_node {
                     if node.kind() == "formal_parameters" {
@@ -169,6 +169,16 @@ impl<'a> SymbolTableBuilder<'a> {
                 for i in 0..node.named_child_count() {
                     let parameter_name = node.named_child(i).unwrap();
                     scope.names.insert(parameter_name);
+                }
+            },
+            "catch_clause" => {
+                // Catch clause identifier has to be registered in the child statement block.
+                if let Some(catch_statement) = node.child_by_field_name(b"body") {
+                    self.visit(catch_statement);
+                    let scope = self.scope_stack.last_mut().unwrap();
+                    if let Some(catch_param) = node.child_by_field_name(b"parameter") {
+                        scope.names.insert(catch_param);
+                    }
                 }
             },
             "import_specifier" => {
