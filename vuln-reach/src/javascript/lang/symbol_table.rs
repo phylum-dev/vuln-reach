@@ -124,16 +124,11 @@ impl<'a> SymbolTableBuilder<'a> {
             },
             "function_declaration" | "generator_function_declaration" | "class_declaration" => {
                 // Function declarations show up in the parent *function* scope.
-                // let name = self.tree.repr_of(node.child_by_field_name(b"name").unwrap());
                 let name = node.child_by_field_name(b"name").unwrap();
                 let scope = self.find_parent_function_scope().unwrap();
                 scope.define(name);
 
                 // Prioritize visiting the statement block and then the formal parameters.
-                // let body = node.child_by_field_name(b"body").unwrap();
-                // let parameters = node.child_by_field_name(b"parameters").unwrap();
-                // self.visit(body);
-                // self.visit(parameters);
                 self.visit_children(node);
             },
             "variable_declaration" => {
