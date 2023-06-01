@@ -58,6 +58,12 @@ impl TryFrom<Tree> for Module {
     type Error = Error;
 
     fn try_from(tree: Tree) -> Result<Self> {
+        // Fail if there is an error anywhere in the AST.
+        //
+        // `tree-sitter` is capable of parsing code with errors in it, but
+        // code with errors won't be executable by a runtime anyway, and as
+        // such anything in it will also be unreachable. We can safely skip
+        // processing these cases.
         if tree.root_node().has_error() {
             Err(Error::ParseError)
         } else {
