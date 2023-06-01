@@ -6,31 +6,36 @@ use vuln_reach::javascript::package::Package;
 use vuln_reach_upstream::javascript::module::TarballModuleResolver as UpstreamTarballModuleResolver;
 use vuln_reach_upstream::javascript::package::Package as UpstreamPackage;
 
-// Some useful test tarballs:
-//   https://registry.npmjs.org/core-js/-/core-js-3.30.2.tgz
-//   https://registry.npmjs.org/codemirror/-/codemirror-5.5.0.tgz
-//   https://registry.npmjs.org/mongoose/-/mongoose-7.2.1.tgz
-const PACKAGE_URI: &str = "https://registry.npmjs.org/mongoose/-/mongoose-7.2.1.tgz";
+const PACKAGES: &str = include_str!("../packages");
 
 #[tokio::main]
 async fn main() {
-    let tarball = reqwest::get(PACKAGE_URI).await.unwrap().bytes().await.unwrap();
+    for package_uri in PACKAGES.lines() {
+        // Ignore packages which are commented out.
+        if package_uri.starts_with('#') {
+            continue;
+        }
 
-    // Time loading HEAD.
-    let package = package(&tarball);
+        println!("Benchmarking {package_uri}:");
 
-    // Time loading upstream.
-    let upstream_package = upstream_package(&tarball);
+        let tarball = reqwest::get(package_uri).await.unwrap().bytes().await.unwrap();
 
-    // Ensure equivalence.
-    assert_eq(upstream_package, package);
+        // Time loading HEAD.
+        let package = package(&tarball);
+
+        // Time loading upstream.
+        let upstream_package = upstream_package(&tarball);
+
+        // Ensure equivalence.
+        assert_eq(upstream_package, package);
+    }
 }
 
 // Load package for the current revision.
 fn package(tarball: &Bytes) -> Package<TarballModuleResolver> {
     let start = std::time::Instant::now();
     let package = Package::from_tarball_bytes(tarball.to_vec()).unwrap();
-    println!("HEAD loaded in {:?}", start.elapsed());
+    println!("  HEAD loaded in {:?}", start.elapsed());
 
     package
 }
@@ -39,7 +44,7 @@ fn package(tarball: &Bytes) -> Package<TarballModuleResolver> {
 fn upstream_package(tarball: &Bytes) -> UpstreamPackage<UpstreamTarballModuleResolver> {
     let start = std::time::Instant::now();
     let package = UpstreamPackage::from_tarball_bytes(tarball.to_vec()).unwrap();
-    println!("Upstream loaded in {:?}", start.elapsed());
+    println!("  Upstream loaded in {:?}", start.elapsed());
 
     package
 }
