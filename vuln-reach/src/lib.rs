@@ -35,6 +35,8 @@ pub enum Error {
     IoError(#[from] io::Error),
     #[error("generic")]
     Generic(String),
+    #[error("tree contains parse errors")]
+    ParseError,
     #[error("node does not exist in tree")]
     InvalidNode,
 }

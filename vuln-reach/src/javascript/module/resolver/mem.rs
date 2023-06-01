@@ -40,7 +40,7 @@ impl ModuleResolver for MemModuleResolver {
     fn load<P: AsRef<Path>>(&self, path: P) -> Result<Module> {
         let path = self.resolve_absolute(path)?;
 
-        let tree = Tree::new(self.backing.get(path.as_path()).unwrap().to_string())?.into();
+        let tree = Tree::new(self.backing.get(path.as_path()).unwrap().to_string())?.try_into()?;
 
         Ok(tree)
     }

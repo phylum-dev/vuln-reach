@@ -56,7 +56,7 @@ impl ModuleResolver for TarballModuleResolver {
         let source = std::str::from_utf8(self.files.get(&path).unwrap())
             .map_err(|e| Error::Generic(format!("{}: {}", path.display(), e)))?
             .to_string();
-        let tree = Tree::new(source)?.into();
+        let tree = Tree::new(source)?.try_into()?;
 
         Ok(tree)
     }

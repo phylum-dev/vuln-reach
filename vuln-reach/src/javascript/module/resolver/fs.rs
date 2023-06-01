@@ -40,7 +40,7 @@ impl ModuleResolver for FilesystemModuleResolver {
 
         let source = fs::read_to_string(&path)
             .map_err(|e| Error::Generic(format!("{}: {}", path.display(), e)))?;
-        let tree = Tree::new(source)?.into();
+        let tree = Tree::new(source)?.try_into()?;
 
         Ok(tree)
     }
