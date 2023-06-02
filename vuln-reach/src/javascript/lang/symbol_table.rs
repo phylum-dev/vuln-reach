@@ -139,7 +139,7 @@ impl<'a> SymbolTableBuilder<'a> {
                     }
                     let name = declarator_node.child_by_field_name(b"name").unwrap();
                     let scope = self.find_parent_function_scope().unwrap();
-                    scope.names.insert(name);
+                    scope.define(name);
                 }
 
                 self.visit_children(node);
@@ -153,7 +153,7 @@ impl<'a> SymbolTableBuilder<'a> {
                     }
                     let scope = self.scope_stack.last_mut().unwrap();
                     let name = declarator_node.child_by_field_name(b"name").unwrap();
-                    scope.names.insert(name);
+                    scope.define(name);
                 }
 
                 self.visit_children(node);
@@ -163,7 +163,7 @@ impl<'a> SymbolTableBuilder<'a> {
                 let scope = self.scope_stack.last_mut().unwrap();
                 for i in 0..node.named_child_count() {
                     let parameter_name = node.named_child(i).unwrap();
-                    scope.names.insert(parameter_name);
+                    scope.define(parameter_name);
                 }
             },
             "catch_clause" => {
@@ -172,7 +172,7 @@ impl<'a> SymbolTableBuilder<'a> {
                     self.visit(catch_statement);
                     let scope = self.scope_stack.last_mut().unwrap();
                     if let Some(catch_param) = node.child_by_field_name(b"parameter") {
-                        scope.names.insert(catch_param);
+                        scope.define(catch_param);
                     }
                 }
             },
@@ -184,7 +184,7 @@ impl<'a> SymbolTableBuilder<'a> {
 
                 let name = node.child_by_field_name(b"name").unwrap();
                 let alias = node.child_by_field_name(b"alias");
-                scope.names.insert(alias.unwrap_or(name));
+                scope.define(alias.unwrap_or(name));
 
                 self.visit_children(node);
             },
@@ -199,7 +199,7 @@ impl<'a> SymbolTableBuilder<'a> {
                 for i in 0..node.named_child_count() {
                     let identifier = node.named_child(i).unwrap();
                     if identifier.kind() == "identifier" {
-                        scope.names.insert(identifier);
+                        scope.define(identifier);
                     }
                 }
 
