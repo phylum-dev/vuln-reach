@@ -397,107 +397,43 @@ mod tests {
 
     #[test]
     fn named_function() {
-        let tree = Tree::new(
-            r#"
+        let code = r#"
             function foo() { }
 
             function bar() {
                 foo();
             }
-            "#
-            .to_string(),
-        )
-        .unwrap();
-        let st = SymbolTable::new(&tree);
-        let accesses = AccessGraph::new(&tree, &st);
-
-        // The `foo` function
-        let foo = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(1, 21), Point::new(1, 24))
-            .unwrap();
-
-        // The `bar` function
-        let bar = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(3, 21), Point::new(0, 24))
-            .unwrap();
-
-        let paths = accesses.compute_paths(|access| access.node == bar, foo).unwrap();
-        println!("{paths:#?}");
-        assert!(!paths.is_empty());
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
     }
 
     #[test]
     fn named_parenthesized_function() {
-        let tree = Tree::new(
-            r#"
+        let code = r#"
             function foo() { }
 
             function bar() {
                 (foo());
             }
-            "#
-            .to_string(),
-        )
-        .unwrap();
-        let st = SymbolTable::new(&tree);
-        let accesses = AccessGraph::new(&tree, &st);
-
-        // The `foo` function
-        let foo = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(1, 21), Point::new(1, 24))
-            .unwrap();
-
-        // The `bar` function
-        let bar = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(3, 21), Point::new(0, 24))
-            .unwrap();
-
-        let paths = accesses.compute_paths(|access| access.node == bar, foo).unwrap();
-        println!("{paths:#?}");
-        assert!(!paths.is_empty());
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
     }
 
     #[test]
     fn immediate_named_function() {
-        let tree = Tree::new(
-            r#"
+        let code = r#"
             function foo() { }
 
             function bar() {
                 (function test() { foo(); })();
             }
-            "#
-            .to_string(),
-        )
-        .unwrap();
-        let st = SymbolTable::new(&tree);
-        let accesses = AccessGraph::new(&tree, &st);
-
-        // The `foo` function
-        let foo = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(1, 21), Point::new(1, 24))
-            .unwrap();
-
-        // The `bar` function
-        let bar = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(3, 21), Point::new(0, 24))
-            .unwrap();
-
-        let paths = accesses.compute_paths(|access| access.node == bar, foo).unwrap();
-        println!("{paths:#?}");
-        assert!(!paths.is_empty());
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
     }
 
     #[test]
     fn assigned_named_function() {
-        let tree = Tree::new(
-            r#"
+        let code = r#"
             function foo() { }
 
             function bar() {
@@ -506,202 +442,76 @@ mod tests {
                 };
                 xxx();
             }
-            "#
-            .to_string(),
-        )
-        .unwrap();
-        let st = SymbolTable::new(&tree);
-        let accesses = AccessGraph::new(&tree, &st);
-
-        // The `foo` function
-        let foo = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(1, 21), Point::new(1, 24))
-            .unwrap();
-
-        // The `bar` function
-        let bar = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(3, 21), Point::new(0, 24))
-            .unwrap();
-
-        let paths = accesses.compute_paths(|access| access.node == bar, foo).unwrap();
-        println!("{paths:#?}");
-        assert!(!paths.is_empty());
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
     }
 
     #[test]
     fn assigned_anonymous_function() {
-        let tree = Tree::new(
-            r#"
+        let code = r#"
             function foo() { }
 
             function bar() {
                 var test = function() { foo(); };
                 test();
             }
-            "#
-            .to_string(),
-        )
-        .unwrap();
-        let st = SymbolTable::new(&tree);
-        let accesses = AccessGraph::new(&tree, &st);
-
-        // The `foo` function
-        let foo = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(1, 21), Point::new(1, 24))
-            .unwrap();
-
-        // The `bar` function
-        let bar = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(3, 21), Point::new(0, 24))
-            .unwrap();
-
-        let paths = accesses.compute_paths(|access| access.node == bar, foo).unwrap();
-        println!("{paths:#?}");
-        assert!(!paths.is_empty());
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
     }
 
     #[test]
     fn assigned_anonymous_parenthesized_function() {
-        let tree = Tree::new(
-            r#"
+        let code = r#"
             function foo() { }
 
             function bar() {
                 var test = (((function() { foo(); })));
                 test();
             }
-            "#
-            .to_string(),
-        )
-        .unwrap();
-        let st = SymbolTable::new(&tree);
-        let accesses = AccessGraph::new(&tree, &st);
-
-        // The `foo` function
-        let foo = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(1, 21), Point::new(1, 24))
-            .unwrap();
-
-        // The `bar` function
-        let bar = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(3, 21), Point::new(0, 24))
-            .unwrap();
-
-        let paths = accesses.compute_paths(|access| access.node == bar, foo).unwrap();
-        println!("{paths:#?}");
-        assert!(!paths.is_empty());
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
     }
 
     #[test]
     fn immediate_anonymous_function() {
-        let tree = Tree::new(
-            r#"
+        let code = r#"
             function foo() { }
 
             function bar() {
                 (function() { foo(); })();
             }
-            "#
-            .to_string(),
-        )
-        .unwrap();
-        let st = SymbolTable::new(&tree);
-        let accesses = AccessGraph::new(&tree, &st);
-
-        // The `foo` function
-        let foo = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(1, 21), Point::new(1, 24))
-            .unwrap();
-
-        // The `bar` function
-        let bar = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(3, 21), Point::new(0, 24))
-            .unwrap();
-
-        let paths = accesses.compute_paths(|access| access.node == bar, foo).unwrap();
-        println!("{paths:#?}");
-        assert!(!paths.is_empty());
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
     }
 
     #[test]
     fn assigned_lambda() {
-        let tree = Tree::new(
-            r#"
+        let code = r#"
             function foo() { }
 
             function bar() {
                 var test = () => { foo(); };
                 test();
             }
-            "#
-            .to_string(),
-        )
-        .unwrap();
-        let st = SymbolTable::new(&tree);
-        let accesses = AccessGraph::new(&tree, &st);
-
-        // The `foo` function
-        let foo = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(1, 21), Point::new(1, 24))
-            .unwrap();
-
-        // The `bar` function
-        let bar = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(3, 21), Point::new(0, 24))
-            .unwrap();
-
-        let paths = accesses.compute_paths(|access| access.node == bar, foo).unwrap();
-        println!("{paths:#?}");
-        assert!(!paths.is_empty());
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
     }
 
     #[test]
     fn immediate_lambda() {
-        let tree = Tree::new(
-            r#"
+        let code = r#"
             function foo() { }
 
             function bar() {
                 () => { foo(); }();
             }
-            "#
-            .to_string(),
-        )
-        .unwrap();
-        let st = SymbolTable::new(&tree);
-        let accesses = AccessGraph::new(&tree, &st);
-
-        // The `foo` function
-        let foo = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(1, 21), Point::new(1, 24))
-            .unwrap();
-
-        // The `bar` function
-        let bar = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(3, 21), Point::new(0, 24))
-            .unwrap();
-
-        let paths = accesses.compute_paths(|access| access.node == bar, foo).unwrap();
-        println!("{paths:#?}");
-        assert!(!paths.is_empty());
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
     }
 
     #[test]
     fn immediate_unassigned_lambda() {
-        let tree = Tree::new(
-            r#"
+        let code = r#"
             function foo() { }
 
             function bar() {
@@ -709,27 +519,47 @@ mod tests {
                     () => { foo(); };
                 })();
             }
-            "#
-            .to_string(),
-        )
-        .unwrap();
+        "#;
+        assert!(!is_reachable(code, "bar", "foo"));
+    }
+
+    /// Check if the `origin` node is able to reach the `target` node.
+    fn is_reachable(code: &str, origin: &str, target: &str) -> bool {
+        // Find node ranges for start and end.
+        let mut origin_range = None;
+        let mut target_range = None;
+        for (i, line) in code.lines().enumerate() {
+            if let Some(offset) = line.find(origin).filter(|_| origin_range.is_none()) {
+                let start = Point::new(i, offset);
+                let end = Point::new(i, offset + origin.len());
+                origin_range = Some((start, end));
+            }
+
+            if let Some(offset) = line.find(target).filter(|_| target_range.is_none()) {
+                let start = Point::new(i, offset);
+                let end = Point::new(i, offset + origin.len());
+                target_range = Some((start, end));
+            }
+        }
+
+        let origin_range = origin_range.unwrap();
+        let target_range = target_range.unwrap();
+
+        // Create access graph.
+        let tree = Tree::new(code.into()).unwrap();
         let st = SymbolTable::new(&tree);
         let accesses = AccessGraph::new(&tree, &st);
 
-        // The `foo` function
-        let foo = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(1, 21), Point::new(1, 24))
-            .unwrap();
+        // Get the tree nodes for the origin and target.
+        let origin_node =
+            tree.root_node().descendant_for_point_range(origin_range.0, origin_range.1).unwrap();
+        let target_node =
+            tree.root_node().descendant_for_point_range(target_range.0, target_range.1).unwrap();
 
-        // The `bar` function
-        let bar = tree
-            .root_node()
-            .descendant_for_point_range(Point::new(3, 21), Point::new(0, 24))
-            .unwrap();
+        // Ensure origin can reach target.
+        let paths =
+            accesses.compute_paths(|access| access.node == origin_node, target_node).unwrap();
 
-        let paths = accesses.compute_paths(|access| access.node == bar, foo).unwrap();
-        println!("{paths:#?}");
-        assert!(paths.is_empty());
+        !paths.is_empty()
     }
 }
