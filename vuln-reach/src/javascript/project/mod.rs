@@ -312,13 +312,16 @@ impl<R: ModuleResolver> Project<R> {
                     // target nodes, and attach information about the imported
                     // symbol.
                     if reachability_check {
-                        let pos = node.start_position();
+                        let start_pos = node.start_position();
+                        let end_pos = node.end_position();
                         target_nodes.push((
                             VulnerableNode::new(
                                 package_spec,
                                 module_spec.to_string_lossy(),
-                                pos.row,
-                                pos.column,
+                                start_pos.row,
+                                start_pos.column,
+                                end_pos.row,
+                                end_pos.column,
                             ),
                             Some(VulnerableEdge::new(dep_package, dep_module)),
                         ));
@@ -555,7 +558,7 @@ mod tests {
         let project = project_trivial_esm();
 
         let r = project.reachability_inner(
-            &VulnerableNode::new("dependency", "vuln.js", 1, 31),
+            &VulnerableNode::new("dependency", "vuln.js", 1, 31, 1, 34),
             Default::default(),
         );
         let path = r.find_path("dependent").unwrap();
@@ -568,7 +571,7 @@ mod tests {
         let project = project_trivial_cjs();
 
         let r = project.reachability_inner(
-            &VulnerableNode::new("dependency", "vuln.js", 1, 41),
+            &VulnerableNode::new("dependency", "vuln.js", 1, 41, 1, 44),
             Default::default(),
         );
         let path = r.find_path("dependent").unwrap();
