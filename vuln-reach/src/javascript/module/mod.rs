@@ -18,7 +18,7 @@ pub use crate::javascript::module::resolver::fs::FilesystemModuleResolver;
 pub use crate::javascript::module::resolver::mem::MemModuleResolver;
 pub use crate::javascript::module::resolver::tgz::TarballModuleResolver;
 pub use crate::javascript::module::resolver::ModuleResolver;
-use crate::{Result, Tree};
+use crate::{Error, Result, Tree};
 
 #[derive(Clone, Debug)]
 pub(crate) enum PathToExport<'a> {
@@ -54,15 +54,27 @@ pub struct Module {
     exports: Exports<'this>,
 }
 
-impl From<Tree> for Module {
-    fn from(tree: Tree) -> Self {
-        Module::new(
-            tree,
-            |tree| SymbolTable::new(tree),
-            |tree, symbol_table| AccessGraph::new(tree, symbol_table),
-            |tree| Imports::new(tree),
-            |tree| Exports::new(tree),
-        )
+impl TryFrom<Tree> for Module {
+    type Error = Error;
+
+    fn try_from(tree: Tree) -> Result<Self> {
+        // Fail if there is an error anywhere in the AST.
+        //
+        // `tree-sitter` is capable of parsing code with errors in it, but
+        // code with errors won't be executable by a runtime anyway, and as
+        // such anything in it will also be unreachable. We can safely skip
+        // processing these cases.
+        if tree.root_node().has_error() {
+            Err(Error::ParseError)
+        } else {
+            Ok(Module::new(
+                tree,
+                |tree| SymbolTable::new(tree),
+                |tree, symbol_table| AccessGraph::new(tree, symbol_table),
+                |tree| Imports::new(tree),
+                |tree| Exports::new(tree),
+            ))
+        }
     }
 }
 
@@ -291,7 +303,7 @@ mod tests {
 
     #[test]
     fn test_paths_to_side_effects() {
-        let module = Module::from(
+        let module = Module::try_from(
             Tree::new(dedent(
                 r#"
             let value = 3
@@ -308,7 +320,8 @@ mod tests {
         "#,
             ))
             .unwrap(),
-        );
+        )
+        .unwrap();
 
         let paths = module
             .paths_to_exports(
@@ -338,5 +351,21 @@ mod tests {
             Point::new(1, 4),
             "Wrong node accessed"
         );
+    }
+
+    #[test]
+    fn test_module_with_errors() {
+        let tree = Tree::new(
+            r#"
+            #[test]
+            fn test_function() {
+                panic!("I am not even JavaScript code");
+            }
+        "#
+            .to_string(),
+        )
+        .expect("The tree should be parsed anyway");
+
+        assert!(matches!(Module::try_from(tree), Err(Error::ParseError)));
     }
 }
