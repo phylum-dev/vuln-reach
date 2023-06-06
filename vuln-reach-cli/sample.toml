@@ -8,7 +8,7 @@ packages = [
   { name = "generic-pool", version = "3.8.2" },
 ]
 vuln = [
-  { package = "generic-pool", module = "lib/Pool.js", row = 743, column = 17 }
+  { package = "generic-pool", module = "lib/Pool.js", start_row = 743, start_column = 17, end_row = 743, end_column = 21 }
 ]
 
 [[projects]]
@@ -20,5 +20,5 @@ packages = [
   { name = "minipass", version = "4.0.2" },
 ]
 vuln = [
-  { package = "lru-cache", module = "index.js", row = 1017, column = 24 }
+  { package = "lru-cache", module = "index.js", start_row = 1017, start_column = 17, end_row = 1017, end_column = 24 }
 ]
