@@ -178,9 +178,13 @@ pub struct VulnerableNode {
     /// The module specifier.
     module: String,
     /// The starting row (zero-indexed).
-    row: usize,
+    start_row: usize,
     /// The starting column (zero-indexed).
-    column: usize,
+    start_column: usize,
+    /// The ending row (zero-indexed).
+    end_row: usize,
+    /// The ending column (zero-indexed).
+    end_column: usize,
 }
 
 impl VulnerableNode {
@@ -188,10 +192,19 @@ impl VulnerableNode {
     pub fn new<P: Into<String>, M: Into<String>>(
         package: P,
         module: M,
-        row: usize,
-        column: usize,
+        start_row: usize,
+        start_column: usize,
+        end_row: usize,
+        end_column: usize,
     ) -> Self {
-        Self { package: package.into(), module: module.into(), row, column }
+        Self {
+            package: package.into(),
+            module: module.into(),
+            start_row,
+            start_column,
+            end_row,
+            end_column,
+        }
     }
 
     pub fn package(&self) -> &str {
@@ -202,12 +215,20 @@ impl VulnerableNode {
         &self.module
     }
 
-    pub fn row(&self) -> usize {
-        self.row
+    pub fn start_row(&self) -> usize {
+        self.start_row
     }
 
-    pub fn column(&self) -> usize {
-        self.column
+    pub fn start_column(&self) -> usize {
+        self.start_column
+    }
+
+    pub fn end_row(&self) -> usize {
+        self.end_row
+    }
+
+    pub fn end_column(&self) -> usize {
+        self.end_column
     }
 }
 
@@ -326,8 +347,8 @@ impl PackageReachability {
             .tree()
             .root_node()
             .descendant_for_point_range(
-                Point::new(vuln_node.row, vuln_node.column),
-                Point::new(vuln_node.row, vuln_node.column),
+                Point::new(vuln_node.start_row, vuln_node.start_column),
+                Point::new(vuln_node.start_row, vuln_node.start_column),
             )
             .ok_or_else(|| Error::Generic(format!("Node not found: {vuln_node:?}")))?;
         let paths_to_exports = module.paths_to_exports(vuln_ts_node)?;
@@ -728,7 +749,7 @@ mod tests {
         let package = fixture_esm_package1();
         let r = PackageReachability::new(
             &package,
-            &VulnerableNode::new("fixture", "source3.mjs".to_string(), 1, 10),
+            &VulnerableNode::new("fixture", "source3.mjs".to_string(), 1, 9, 1, 16),
         )
         .unwrap();
         println!("{r:#?}");
@@ -752,7 +773,7 @@ mod tests {
         let package = fixture_esm_package1();
         let r = PackageReachability::new(
             &package,
-            &VulnerableNode::new("fixture", "source3.mjs".to_string(), 1, 10),
+            &VulnerableNode::new("fixture", "source3.mjs".to_string(), 1, 9, 1, 16),
         )
         .unwrap();
 
@@ -764,7 +785,7 @@ mod tests {
         let package = fixture_cjs_package1();
         let r = PackageReachability::new(
             &package,
-            &VulnerableNode::new("fixture", "source3.js".to_string(), 1, 10),
+            &VulnerableNode::new("fixture", "source3.js".to_string(), 1, 9, 1, 16),
         )
         .unwrap();
         println!("{r:#?}");

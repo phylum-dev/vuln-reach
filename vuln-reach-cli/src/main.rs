@@ -124,8 +124,8 @@ impl ProjectDef {
                         "\n\x1b[31m  *** Node {}/{}:{}:{} is reachable!\x1b[0m\n",
                         node.package(),
                         node.module(),
-                        node.row(),
-                        node.column()
+                        node.start_row(),
+                        node.start_column()
                     );
                     print_path(path);
                 },
@@ -134,8 +134,8 @@ impl ProjectDef {
                         "\n\x1b[33m  *** No paths to {}/{}:{}:{} found.\x1b[0m",
                         node.package(),
                         node.module(),
-                        node.row(),
-                        node.column()
+                        node.start_row(),
+                        node.start_column()
                     );
                 },
             }
