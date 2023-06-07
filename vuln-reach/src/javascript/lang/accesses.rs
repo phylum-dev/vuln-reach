@@ -170,22 +170,12 @@ impl<'a> AccessGraph<'a> {
             // Ensure parent node is a function.
             let mut cursor = cursor_cache.cursor(scope).ok()?;
             match cursor.goto_parent()?.kind() {
-                // Find accessor for anonymous functions.
+                // Return parent accessor for anonymous functions.
                 "function" | "arrow_function" => {
-                    // Check if the function is executed or assigned.
-                    Self::find_function_access(symbol_table, cursor_cache, cursor.node())
+                    return Self::find_accessor(symbol_table, cursor_cache, cursor.node());
                 },
-                // Find accessor for named functions.
-                "function_declaration" => {
-                    // Check the name the function is defined as.
-                    let child = cursor.node().child_by_field_name("name")?;
-
-                    // Check if the function is renamed or immediately executed.
-                    let access = Self::find_function_access(symbol_table, cursor_cache, child);
-
-                    // If the function is not renamed or executed, fall back to its original name.
-                    Some(access.unwrap_or(child))
-                },
+                // Return identifier for named functions.
+                "function_declaration" => return cursor.node().child_by_field_name("name"),
                 _ => None,
             }
         }) {
@@ -232,36 +222,6 @@ impl<'a> AccessGraph<'a> {
             }
         }
         None
-    }
-
-    /// Check where a function is assigned to or executed from.
-    fn find_function_access(
-        symbol_table: &SymbolTable<'a>,
-        cursor_cache: &mut TreeCursorCache<'a>,
-        node: Node<'a>,
-    ) -> Option<Node<'a>> {
-        let mut access_node = None;
-
-        let mut cursor = cursor_cache.cursor(node).unwrap();
-        while let Some(parent) = cursor.goto_parent() {
-            match parent.kind() {
-                // Get identifier if this function is assigned to a variable.
-                "variable_declarator" => access_node = Some(parent),
-                // Find the parent scope for immediately executed anonymous functions.
-                "call_expression" => {
-                    let scope = Self::find_parent_scope(symbol_table, cursor_cache, parent);
-                    access_node = scope?.parent();
-                },
-                // Running into another function without the current one being executed or
-                // assigned means it can never be reached.
-                "function" | "arrow_function" => break,
-                _ => (),
-            }
-        }
-
-        access_node?.child_by_field_name("name")
-            // TODO: Is this actually necessary?
-            .filter(|accessor| accessor.kind() == "identifier")
     }
 
     // Compute paths between a source node and one or more target nodes.
@@ -510,17 +470,51 @@ mod tests {
     }
 
     #[test]
-    fn immediate_unassigned_lambda() {
+    fn bracketed_lambda() {
         let code = r#"
             function foo() { }
 
             function bar() {
-                (() => {
-                    () => { foo(); };
-                })();
+                {x = (
+                    () => { foo(); }
+                )}
+
+                x()
             }
         "#;
-        assert!(!is_reachable(code, "bar", "foo"));
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[ignore]
+    #[test]
+    fn leaked_renamed_function() {
+        let code = r#"
+            function foo() { }
+
+            {
+                var leaked = foo;
+            }
+
+            function bar() {
+                leaked();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[ignore]
+    #[test]
+    fn parenthesized_variable() {
+        let code = r#"
+            function foo() { }
+
+            var leaked = ( ( ( foo ) ) );
+
+            function bar() {
+                leaked();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
     }
 
     /// Check if the `origin` node is able to reach the `target` node.
