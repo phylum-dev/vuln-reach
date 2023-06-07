@@ -487,6 +487,21 @@ mod tests {
 
     #[ignore]
     #[test]
+    fn renamed_function() {
+        let code = r#"
+            function foo() { }
+
+            renamed = foo;
+
+            function bar() {
+                renamed();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[ignore]
+    #[test]
     fn leaked_renamed_function() {
         let code = r#"
             function foo() { }
