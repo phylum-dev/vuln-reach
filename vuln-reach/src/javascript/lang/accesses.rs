@@ -112,7 +112,7 @@ impl<'a> AccessGraph<'a> {
 
                 let decl_scope = decl_scope.node();
 
-                // Get the accessor as defined by the method.
+                // Get the scope of the next parent accessing this node.
                 let accessor = AccessGraph::find_accessor(symbol_table, &mut cursor_cache, node)
                     .and_then(|node| {
                         let cursor = cursor_cache.cursor(node).ok()?;
@@ -485,7 +485,6 @@ mod tests {
         assert!(is_reachable(code, "bar", "foo"));
     }
 
-    #[ignore]
     #[test]
     fn renamed_function() {
         let code = r#"

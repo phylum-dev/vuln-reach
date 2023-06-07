@@ -12,6 +12,7 @@ pub struct Scope<'a> {
     level: usize,
     node: Node<'a>,
     names: HashSet<Node<'a>>,
+    assignments: HashSet<Node<'a>>,
 }
 
 impl<'a> Scope<'a> {
@@ -59,7 +60,23 @@ impl<'a> SymbolTableBuilder<'a> {
             .map(|(idx, scope)| (scope.node, idx))
             .collect::<HashMap<_, _>>();
 
-        SymbolTable { tree, scopes: visitor.scope_table, scope_indices }
+        let mut table = SymbolTable { tree, scopes: visitor.scope_table, scope_indices };
+
+        // TODO: This is extremely bad for performance and a massive hack.
+        let mut hoisted_globals = Vec::new();
+        for scope in &table.scopes {
+            for assignment in &scope.assignments {
+                if table.lookup(Cursor::new(tree, *assignment).unwrap()).is_none() {
+                    let name = assignment.child_by_field_name(b"left").unwrap();
+                    hoisted_globals.push(name);
+                }
+            }
+        }
+        for hoisted_global in hoisted_globals {
+            table.scopes[0].define(hoisted_global);
+        }
+
+        table
     }
 
     fn root_scope(&mut self) -> &mut Scope<'a> {
@@ -88,7 +105,12 @@ impl<'a> SymbolTableBuilder<'a> {
     }
 
     fn push_scope(&mut self, node: Node<'a>) {
-        self.scope_stack.push(Scope { level: self.cur_level, node, names: Default::default() });
+        self.scope_stack.push(Scope {
+            node,
+            level: self.cur_level,
+            assignments: Default::default(),
+            names: Default::default(),
+        });
         self.cur_level += 1;
     }
 
@@ -155,6 +177,13 @@ impl<'a> SymbolTableBuilder<'a> {
                     let name = declarator_node.child_by_field_name(b"name").unwrap();
                     scope.define(name);
                 }
+
+                self.visit_children(node);
+            },
+            "assignment_expression" | "augmented_assignment_expression" => {
+                // Add assignments their scope, allowing identification of hoisted variables.
+                let scope = self.find_parent_function_scope().unwrap();
+                scope.assignments.insert(node);
 
                 self.visit_children(node);
             },
