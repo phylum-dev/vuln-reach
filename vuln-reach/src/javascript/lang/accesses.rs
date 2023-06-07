@@ -154,18 +154,7 @@ impl<'a> AccessGraph<'a> {
         node: Node<'a>,
     ) -> Option<Node<'a>> {
         // Determine the scope the identifier is in.
-        let mut parent_cursor = cursor_cache.cursor(node).unwrap();
-        let mut parent_scope = None;
-        while let Some(node) = parent_cursor.goto_parent() {
-            if parent_cursor
-                .parent()
-                .map_or(false, |parent| parent.child_by_field_name("body") == Some(node))
-                && symbol_table.get_scope(node).is_some()
-            {
-                parent_scope = Some(node);
-                break;
-            }
-        }
+        let parent_scope = Self::find_parent_scope(symbol_table, cursor_cache, node);
 
         // Class declaration identifiers
         if let Some(accessor) = parent_scope.and_then(|scope| {
@@ -176,11 +165,20 @@ impl<'a> AccessGraph<'a> {
             return Some(accessor);
         }
 
-        // Function calls
-        if let Some(accessor) = parent_scope
-            .and_then(|node| cursor_cache.cursor(node).ok()?.parent()?.child_by_field_name(b"name"))
-            .filter(|accessor| accessor.kind() == "identifier")
-        {
+        // Functions and lambdas.
+        if let Some(accessor) = parent_scope.and_then(|scope| {
+            // Ensure parent node is a function.
+            let mut cursor = cursor_cache.cursor(scope).ok()?;
+            match cursor.goto_parent()?.kind() {
+                // Return parent accessor for anonymous functions.
+                "function" | "arrow_function" => {
+                    return Self::find_accessor(symbol_table, cursor_cache, cursor.node());
+                },
+                // Return identifier for named functions.
+                "function_declaration" => return cursor.node().child_by_field_name("name"),
+                _ => None,
+            }
+        }) {
             return Some(accessor);
         }
 
@@ -204,6 +202,25 @@ impl<'a> AccessGraph<'a> {
             return Some(accessor);
         }
 
+        None
+    }
+
+    /// Find the parent scope of a node.
+    fn find_parent_scope(
+        symbol_table: &SymbolTable<'a>,
+        cursor_cache: &mut TreeCursorCache<'a>,
+        node: Node<'a>,
+    ) -> Option<Node<'a>> {
+        let mut parent_cursor = cursor_cache.cursor(node).unwrap();
+        while let Some(node) = parent_cursor.goto_parent() {
+            let parent = parent_cursor.parent()?;
+
+            if parent.child_by_field_name("body") == Some(node)
+                && symbol_table.get_scope(node).is_some()
+            {
+                return Some(node);
+            }
+        }
         None
     }
 
@@ -336,5 +353,222 @@ mod tests {
         let paths = accesses.compute_paths(|access| access.node == param, ident).unwrap();
         println!("{paths:#?}");
         assert!(!paths.is_empty());
+    }
+
+    #[test]
+    fn named_function() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                foo();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn named_parenthesized_function() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                (foo());
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn immediate_named_function() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                (function test() { foo(); })();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn assigned_named_function() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                var xxx = function test() {
+                    foo();
+                };
+                xxx();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn assigned_anonymous_function() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                var test = function() { foo(); };
+                test();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn assigned_anonymous_parenthesized_function() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                var test = (((function() { foo(); })));
+                test();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn immediate_anonymous_function() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                (function() { foo(); })();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn assigned_lambda() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                var test = () => { foo(); };
+                test();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn immediate_lambda() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                () => { foo(); }();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn bracketed_lambda() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                {x = (
+                    () => { foo(); }
+                )}
+
+                x()
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[ignore]
+    #[test]
+    fn renamed_function() {
+        let code = r#"
+            function foo() { }
+
+            renamed = foo;
+
+            function bar() {
+                renamed();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[ignore]
+    #[test]
+    fn leaked_renamed_function() {
+        let code = r#"
+            function foo() { }
+
+            {
+                var leaked = foo;
+            }
+
+            function bar() {
+                leaked();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[ignore]
+    #[test]
+    fn parenthesized_variable() {
+        let code = r#"
+            function foo() { }
+
+            var leaked = ( ( ( foo ) ) );
+
+            function bar() {
+                leaked();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    /// Check if the `origin` node is able to reach the `target` node.
+    fn is_reachable(code: &str, origin: &str, target: &str) -> bool {
+        // Find node ranges for start and end.
+        let mut origin_range = None;
+        let mut target_range = None;
+        for (i, line) in code.lines().enumerate() {
+            if let Some(offset) = line.find(origin).filter(|_| origin_range.is_none()) {
+                let start = Point::new(i, offset);
+                let end = Point::new(i, offset + origin.len());
+                origin_range = Some((start, end));
+            }
+
+            if let Some(offset) = line.find(target).filter(|_| target_range.is_none()) {
+                let start = Point::new(i, offset);
+                let end = Point::new(i, offset + origin.len());
+                target_range = Some((start, end));
+            }
+        }
+
+        let origin_range = origin_range.unwrap();
+        let target_range = target_range.unwrap();
+
+        // Create access graph.
+        let tree = Tree::new(code.into()).unwrap();
+        let st = SymbolTable::new(&tree);
+        let accesses = AccessGraph::new(&tree, &st);
+
+        // Get the tree nodes for the origin and target.
+        let origin_node =
+            tree.root_node().descendant_for_point_range(origin_range.0, origin_range.1).unwrap();
+        let target_node =
+            tree.root_node().descendant_for_point_range(target_range.0, target_range.1).unwrap();
+
+        // Ensure origin can reach target.
+        let paths =
+            accesses.compute_paths(|access| access.node == origin_node, target_node).unwrap();
+
+        !paths.is_empty()
     }
 }

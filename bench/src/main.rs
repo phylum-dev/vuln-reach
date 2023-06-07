@@ -12,7 +12,7 @@ const PACKAGES: &str = include_str!("../packages");
 async fn main() {
     for package_uri in PACKAGES.lines() {
         // Ignore packages which are commented out.
-        if package_uri.starts_with('#') {
+        if package_uri.starts_with('#') | package_uri.trim().is_empty() {
             continue;
         }
 
@@ -60,11 +60,13 @@ fn assert_eq(
     for (key, upstream_value) in upstream_graph {
         let value = match graph.get(key) {
             Some(value) => value,
-            None => panic!("Missing key {key:?}"),
+            None => panic!("Head missing key {key:?}"),
         };
 
         for (key, upstream_value) in upstream_value {
             assert_eq!(value.get(key), Some(upstream_value));
         }
     }
+
+    assert_eq!(upstream_graph, graph);
 }
