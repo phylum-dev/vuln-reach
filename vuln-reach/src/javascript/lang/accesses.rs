@@ -90,6 +90,11 @@ impl<'a> AccessGraph<'a> {
                 let node = query_match.captures[0].node;
 
                 // Find the scope this node belongs to.
+                //
+                // Navigate the parent stack backwards until a node is found that
+                // is either the top-level "program" node or it is a "statement_block"
+                // that belongs to a function and is in the field named "body" of
+                // said function.
                 let mut scope_cursor = cursor_cache.cursor(node).unwrap();
                 let scope = loop {
                     let node = scope_cursor.goto_parent().unwrap();
@@ -123,6 +128,17 @@ impl<'a> AccessGraph<'a> {
                 Some(Access { node, scope, decl_node, decl_scope, accessor })
             })
             .fold(HashMap::new(), |mut accesses, access| {
+                // Store accesses grouped by the declaration node that is accessed.
+                //
+                // ```js
+                // function foo() {} // <-- this is the declaration.
+                //
+                // function bar() {
+                //   foo(); // <-- this node will result in an access to the above
+                //          //     declaration, and will be stored in the vector at
+                //          //     the entry keyed at the above `foo`'s node.
+                // }
+                // ```
                 let entry: &mut Vec<Access> = accesses.entry(access.decl_node).or_default();
                 entry.push(access);
                 accesses
@@ -166,13 +182,25 @@ impl<'a> AccessGraph<'a> {
 
         for (depth, parent) in cursor.parents().enumerate() {
             match parent.kind() {
+                // Class and function declarations have a name attached to them.
+                // Define that name as accessor.
+                //
                 // Check depth to avoid declarations using themselves as accessor.
                 "class_declaration" | "function_declaration" if depth > 0 => {
                     return parent.child_by_field_name("name");
                 },
+                // Classes, functions and arrow functions without a declaration
+                // don't have a name and can only be accessed from their own
+                // accessor. Recursively find the accessor of their parent node.
                 "class" | "function" | "arrow_function" => {
                     return Self::find_accessor(cursor_cache, parent);
                 },
+                // LHS/RHS expressions.
+                //
+                // If the node we are seeking an accessor for is on the right hand side of an
+                // expression of the form `lhs = rhs`, then this node will be accessed every
+                // time the identifier(s) on `lhs` is accessed. That node will thus be the
+                // accessor.
                 kind @ ("variable_declarator"
                 | "assignment_expression"
                 | "augmented_assignment_expression") => {
@@ -187,6 +215,17 @@ impl<'a> AccessGraph<'a> {
                         return Self::find_accessor(cursor_cache, parent);
                     } else {
                         // Use LHS identifier if node is in RHS of the assignment.
+                        //
+                        // The LHS may be more complex than a single identifier; for example,
+                        // it could be of the form:
+                        // ```js
+                        // foo.bar.baz = call_me()
+                        // ```
+                        // In this case, we want the accessor to be `foo`, i.e. the
+                        // outermost identifier.
+                        // The following function call retrieves the smallest node that
+                        // covers the supplied range. This accounts for both the outermost
+                        // identifier case and the single identifier case.
                         return parent.named_descendant_for_point_range(
                             lhs.start_position(),
                             lhs.start_position(),
@@ -201,7 +240,7 @@ impl<'a> AccessGraph<'a> {
     }
 
     // Compute paths between a source node and one or more target nodes.
-    // The target nodes are established by the supplied predicate.
+    // The supplied predicate determines what is considered a target node.
     pub fn compute_paths<F>(
         &self,
         is_target: F,
