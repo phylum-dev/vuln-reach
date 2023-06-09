@@ -251,12 +251,27 @@ impl<'a> AccessGraph<'a> {
     {
         type NodePath<'a> = Vec<AccessEdge<'a>>;
 
+        // The path finding algorithm is a breadth-first search based on a queue.
+        // The first node that is visited is the supplied source node.
+        // Each element of the queue contains the node to be visited, and a node path
+        // to start from. On each iteration, the node path is augmented with new edges,
+        // cloned and forwarded to future iterations.
         let mut bfs_q: VecDeque<(Node<'a>, NodePath)> = VecDeque::new();
         bfs_q.push_back((source, Vec::new()));
 
+        // Keep a list of all paths found over the course of the algorithm execution.
         let mut found_paths = Vec::new();
+        // Keep a set of visited nodes to avoid cycles and to process each node only
+        // once.
         let mut visited = HashSet::new();
 
+        // Collect accesses in a dictionary where the key is the accessed
+        // identifier. This makes it so that retrieving an access via the identifier is
+        // O(1).
+        //
+        // This is different from `self.accesses`, which is a dictionary of vectors
+        // (rather than single elements) where the key is the _declaration_ node (rather
+        // than the _accessed_ node).
         let access_scopes = self
             .accesses
             .values()
@@ -264,13 +279,18 @@ impl<'a> AccessGraph<'a> {
             .map(|access| (access.node, access))
             .collect::<HashMap<_, _>>();
 
+        // Repeat until the queue is empty.
         while let Some((node, path)) = bfs_q.pop_front() {
+            // Skip if we already visited this node.
             if visited.contains(&node) {
                 continue;
             }
 
             visited.insert(node);
 
+            // Retrieve the access scope of the processed node. This node is an identifier
+            // and an access should be computed for all of them. If that is not the case,
+            // this is a bug; report the error.
             let access = access_scopes.get(&node).copied().ok_or_else(|| {
                 Error::Generic(format!(
                     "All identifiers should have an access scope: {:?} {}",
@@ -279,6 +299,10 @@ impl<'a> AccessGraph<'a> {
                 ))
             })?;
 
+            // Retrieve the accesses linked to the declaration node from the access above.
+            // Similarly to the statement above, there should be an entry in `self.accesses`
+            // for each declaration node. If that is not the case, this is a bug; report
+            // the error.
             let declaration_accesses = self.accesses.get(&access.decl_node).ok_or_else(|| {
                 Error::Generic(format!(
                     "All declarations should have a list of accesses: {:?} {}",
@@ -287,15 +311,46 @@ impl<'a> AccessGraph<'a> {
                 ))
             })?;
 
+            // We started from a node, found out what declaration it is linked to, then
+            // found all the accesses to that declaration. We want to create N edges
+            // between the node and each of the N accessors of the declaration.
             for declaration_access in declaration_accesses {
+                // Clone the path that leads to the current node.
                 let mut path = path.clone();
+                // Add an edge from the current node to this access to the declaration node.
                 path.push(AccessEdge::new(node, *declaration_access));
 
+                // If the access is a target according to the supplied predicate, we have found
+                // a path between the source and the target; add it to the list of found paths.
                 if is_target(declaration_access) {
                     found_paths.push(path.to_vec());
                 }
 
+                // Push suitable accessors to the current node at the bottom of the queue.
+                //
+                // A suitable accessor is a node of kind "identifier" which is also not inside
+                // of a list of formal parameters.
+                //
+                // In the following example, the arguments inside of the parentheses are
+                // identifier, but not accesses, as they serve the sole purpose of defining
+                // names inside of the function scope. On the other hand, the call to `bar` with
+                // argument `arg1` results in an access to `bar` defined in the
+                // global scope and an access to `arg1` defined in
+                // the inner scope of the function.
+                //
+                // ```js
+                // function bar(arg) {}
+                // function foo(arg1, arg2, arg3) {
+                //   var baz;
+                //   bar(arg1);
+                // }
+                // ```
                 if let Some(accessor) = declaration_access.accessor.filter(|node| {
+                    // TODO some accessor nodes are actually scopes, and of kind
+                    // "statement_block". We currently are not processing those,
+                    // and we should either find a strategy for that or improve
+                    // [`Self::find_accessor`] so that it only emits accessors of
+                    // kind "identifier". See the "Generic statement scopes" stanza.
                     if node.kind() != "identifier" {
                         return false;
                     }
@@ -303,6 +358,8 @@ impl<'a> AccessGraph<'a> {
                     let mut cursor = Cursor::new(self.tree, *node).unwrap();
                     cursor.goto_parent().map_or(false, |node| node.kind() != "formal_parameters")
                 }) {
+                    // If the accessor is suitable, push it onto the queue alongside the
+                    // path that leads to it.
                     bfs_q.push_back((accessor, path));
                 }
             }
