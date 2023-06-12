@@ -12,16 +12,32 @@ use crate::Result;
 type RelativeSpec = PathBuf;
 type AbsoluteSpec = PathBuf;
 
+/// Represents a graph of modules in a package.
 pub struct ModuleCache {
+    /// The dictionary that maps absolute import specs to Module objects.
     cache: HashMap<AbsoluteSpec, Module>,
+    /// The graph of relationships. Associate to each module spec a mapping
+    /// between the spec that they use to import a module and the absolute
+    /// spec that that represents.
+    ///
+    /// For example, if `foo/bar/baz.js` imports `../quux.js`, there will
+    /// be a mapping of the form
+    /// ```js
+    /// { "foo/bar/baz.js": { "../quux.js": "foo/quux.js" } }
+    /// ```
     module_graph: HashMap<AbsoluteSpec, HashMap<RelativeSpec, AbsoluteSpec>>,
 }
 
 impl ModuleCache {
+    /// Construct the cache by going through all the paths in the provided resolver.
     pub fn new<R: ModuleResolver>(resolver: &R) -> Result<Self> {
         ModuleCache::with_initial_nodes(resolver, resolver.all_paths())
     }
 
+    /// Construct the cache by going through the specified entry point only.
+    ///
+    /// This will create a smaller graph with only the imports reachable from the
+    /// specified entry point.
     pub fn with_entry_point<P: AsRef<Path>, R: ModuleResolver>(
         resolver: &R,
         entry_point: P,
@@ -29,10 +45,12 @@ impl ModuleCache {
         ModuleCache::with_initial_nodes(resolver, Some(entry_point))
     }
 
+    // Generic constructor that evaluates edges going out of all the supplied import paths.
     fn with_initial_nodes<P: AsRef<Path>, R: ModuleResolver>(
         resolver: &R,
         nodes: impl IntoIterator<Item = P>,
     ) -> Result<Self> {
+        // Create a queue and push to it all the supplied import paths.
         let mut q = VecDeque::<(Option<PathBuf>, PathBuf)>::new();
         nodes.into_iter().for_each(|node| {
             q.push_back((None, node.as_ref().to_path_buf()));
@@ -41,10 +59,12 @@ impl ModuleCache {
         // Cache visited nodes (i.e. modules).
         let mut visited = HashSet::new();
 
+        // Initialize the empty objects.
         let mut cache = HashMap::default();
         let mut module_graph: HashMap<AbsoluteSpec, HashMap<RelativeSpec, AbsoluteSpec>> =
             HashMap::default();
 
+        // Loop until there are no more paths to evaluate.
         while !q.is_empty() {
             // Pick the top of the queue.
             let (current_module_spec, import_spec) = q.pop_front().unwrap();
@@ -93,11 +113,13 @@ impl ModuleCache {
             // Only process import sources now.
             match module.imports() {
                 Imports::Esm(esm_imports) => {
+                    // Add to the queue all the paths that the current ES Module file imports.
                     for import in esm_imports {
                         q.push_back((Some(absolute_spec.clone()), import.source().into()));
                     }
                 },
                 Imports::CommonJs(cjs_imports) => {
+                    // Add to the queue all the paths that the current CommonJS file imports.
                     for import in cjs_imports {
                         q.push_back((Some(absolute_spec.clone()), import.source().into()));
                     }
@@ -117,6 +139,7 @@ impl ModuleCache {
         Ok(Self { cache, module_graph })
     }
 
+    /// Retrieve the dependencies of the given import specification.
     pub fn module_deps<P: AsRef<Path>>(
         &self,
         spec: P,
@@ -124,18 +147,22 @@ impl ModuleCache {
         self.module_graph.get(spec.as_ref())
     }
 
+    /// Retrieve the module associated to the given specification.
     pub fn module<P: AsRef<Path>>(&self, spec: P) -> Option<&Module> {
         self.cache.get(spec.as_ref())
     }
 
+    /// Get the dictionary of all the modules.
     pub fn modules(&self) -> &HashMap<AbsoluteSpec, Module> {
         &self.cache
     }
 
+    /// Get the dependency graph.
     pub fn graph(&self) -> &HashMap<AbsoluteSpec, HashMap<RelativeSpec, AbsoluteSpec>> {
         &self.module_graph
     }
 
+    // Find out which modules import the specified dependency.
     pub fn dependents_of<'a, P: AsRef<Path> + 'a>(
         &'a self,
         dependency: P,
@@ -168,6 +195,7 @@ impl ModuleCache {
             .and_then(|absolute_spec| self.cache.get(absolute_spec))
     }
 
+    /// Convert the graph to the Graphviz dot format.
     pub fn to_dot(&self) -> String {
         let mut buf = String::from("digraph G {\n  rankdir = LR;\n");
         let mut node_id = 0usize;
