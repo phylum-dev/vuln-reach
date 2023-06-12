@@ -173,8 +173,14 @@ impl<'a> AccessGraph<'a> {
                 "class" | "function" | "arrow_function" => {
                     return Self::find_accessor(cursor_cache, parent);
                 },
-                "assignment_expression" | "augmented_assignment_expression" => {
-                    let lhs = parent.child_by_field_name(b"left").unwrap();
+                kind @ ("variable_declarator"
+                | "assignment_expression"
+                | "augmented_assignment_expression") => {
+                    let lhs = if kind == "variable_declarator" {
+                        parent.child_by_field_name(b"name").unwrap()
+                    } else {
+                        parent.child_by_field_name(b"left").unwrap()
+                    };
 
                     if lhs.byte_range().contains(&node.start_byte()) {
                         // Find next parent identifier if node is in LHS of the assignment.
@@ -469,7 +475,6 @@ mod tests {
         assert!(is_reachable(code, "bar", "foo"));
     }
 
-    #[ignore]
     #[test]
     fn leaked_renamed_function() {
         let code = r#"
@@ -486,7 +491,6 @@ mod tests {
         assert!(is_reachable(code, "bar", "foo"));
     }
 
-    #[ignore]
     #[test]
     fn parenthesized_variable() {
         let code = r#"
@@ -496,6 +500,102 @@ mod tests {
 
             function bar() {
                 leaked();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn simple_var_declaration() {
+        let code = r#"
+            function foo() { }
+
+            var test = foo;
+
+            function bar() {
+                test();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn simple_let_declaration() {
+        let code = r#"
+            function foo() { }
+
+            let test = foo;
+
+            function bar() {
+                test();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn simple_const_declaration() {
+        let code = r#"
+            function foo() { }
+
+            const test = foo;
+
+            function bar() {
+                test();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn convoluted_variables() {
+        let code = r#"
+            function foo() { }
+
+            function hoisting() {
+                hoisted = foo;
+            }
+
+            let global = hoisted;
+
+            function bar() {
+                global();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn structured_variables() {
+        let code = r#"
+            function foo() { }
+
+            var test = {
+                sub: {
+                    subsub: {
+                        fun: foo,
+                    },
+                },
+            };
+
+            function bar() {
+                test.sub.subsub.fun();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn indexed_access() {
+        let code = r#"
+            function foo() { }
+
+            var test = {
+                sub: foo,
+            };
+
+            function bar() {
+                test["sub"]();
             }
         "#;
         assert!(is_reachable(code, "bar", "foo"));
