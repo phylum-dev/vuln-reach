@@ -70,7 +70,6 @@ impl<'a> SymbolTableBuilder<'a> {
             for name in assignments {
                 let cursor = Cursor::new(tree, name).unwrap();
                 if table.lookup(cursor).is_none() {
-                    println!("HOISTING {:?}", name);
                     table.scopes[0].define(name);
                 }
             }
