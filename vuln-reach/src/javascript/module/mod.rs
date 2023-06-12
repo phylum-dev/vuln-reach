@@ -37,8 +37,8 @@ impl<'a> PathToExport<'a> {
     }
 }
 
-/// A module object. It contains all information about symbols, accesses, imports and exports and
-/// is self-referencing.
+/// A module object. It contains all information about symbols, accesses,
+/// imports and exports and is self-referencing.
 #[self_referencing]
 pub struct Module {
     tree: Tree,
@@ -197,7 +197,8 @@ impl Module {
             .collect())
     }
 
-    // Find paths to side effects, i.e. nodes that are always accessed when importing a module.
+    // Find paths to side effects, i.e. nodes that are always accessed when
+    // importing a module.
     fn paths_to_side_effects<'a>(&'a self, source: Node<'a>) -> Result<Vec<PathToExport<'a>>> {
         Ok(self
             .accesses()
@@ -223,8 +224,9 @@ impl Module {
         // Always include paths to side effects.
         let mut paths = self.paths_to_side_effects(source)?;
 
-        // Check which kind of exports were found for this module, then find the paths to those
-        // exports. This assumes that ES Module exports and CommonJS exports can't coexist.
+        // Check which kind of exports were found for this module, then find the paths
+        // to those exports. This assumes that ES Module exports and CommonJS
+        // exports can't coexist.
         match self.exports() {
             Exports::Esm(exports) => paths.extend(self.paths_to_exports_esm(source, exports)?),
             Exports::CommonJs(exports) => paths.extend(self.paths_to_exports_cjs(source, exports)?),
