@@ -337,7 +337,7 @@ mod tests {
 
         let Some(PathToExport::SideEffect { name, access_path, effect_node }) =
             paths.into_iter().next() else {
-                panic!("Path found is not to a side effect") 
+                panic!("Path found is not to a side effect")
             };
 
         assert_eq!(name, "foo", "Wrong side effect name {name}");

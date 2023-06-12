@@ -1,5 +1,7 @@
 //! Table of symbols in a source file.
+
 use std::collections::{HashMap, HashSet};
+use std::mem;
 
 use itertools::Itertools;
 use tree_sitter::{Node, QueryCursor};
@@ -12,6 +14,7 @@ pub struct Scope<'a> {
     level: usize,
     node: Node<'a>,
     names: HashSet<Node<'a>>,
+    assignments: HashSet<Node<'a>>,
 }
 
 impl<'a> Scope<'a> {
@@ -59,7 +62,20 @@ impl<'a> SymbolTableBuilder<'a> {
             .map(|(idx, scope)| (scope.node, idx))
             .collect::<HashMap<_, _>>();
 
-        SymbolTable { tree, scopes: visitor.scope_table, scope_indices }
+        let mut table = SymbolTable { tree, scopes: visitor.scope_table, scope_indices };
+
+        // Hoist assignments which were not declared as variables.
+        for i in 0..table.scopes.len() {
+            let assignments = mem::take(&mut table.scopes[i].assignments);
+            for name in assignments {
+                let cursor = Cursor::new(tree, name).unwrap();
+                if table.lookup(cursor).is_none() {
+                    table.scopes[0].define(name);
+                }
+            }
+        }
+
+        table
     }
 
     fn root_scope(&mut self) -> &mut Scope<'a> {
@@ -88,7 +104,12 @@ impl<'a> SymbolTableBuilder<'a> {
     }
 
     fn push_scope(&mut self, node: Node<'a>) {
-        self.scope_stack.push(Scope { level: self.cur_level, node, names: Default::default() });
+        self.scope_stack.push(Scope {
+            node,
+            level: self.cur_level,
+            assignments: Default::default(),
+            names: Default::default(),
+        });
         self.cur_level += 1;
     }
 
@@ -154,6 +175,16 @@ impl<'a> SymbolTableBuilder<'a> {
                     let scope = self.scope_stack.last_mut().unwrap();
                     let name = declarator_node.child_by_field_name(b"name").unwrap();
                     scope.define(name);
+                }
+
+                self.visit_children(node);
+            },
+            "assignment_expression" | "augmented_assignment_expression" => {
+                // Add assignments to their scope, allowing identification of hoisted variables.
+                let scope = self.find_parent_function_scope().unwrap();
+                let name = node.child_by_field_name(b"left").unwrap();
+                if !scope.names.contains(&name) {
+                    scope.assignments.insert(name);
                 }
 
                 self.visit_children(node);
