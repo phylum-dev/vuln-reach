@@ -333,7 +333,6 @@ mod tests {
             )
             .unwrap();
 
-        println!("PATHS: {:?}", paths);
         assert!(paths.len() == 1, "Wrong number of paths found");
 
         let Some(PathToExport::SideEffect { name, access_path, effect_node }) =
