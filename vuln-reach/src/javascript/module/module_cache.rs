@@ -29,15 +29,16 @@ pub struct ModuleCache {
 }
 
 impl ModuleCache {
-    /// Construct the cache by going through all the paths in the provided resolver.
+    /// Construct the cache by going through all the paths in the provided
+    /// resolver.
     pub fn new<R: ModuleResolver>(resolver: &R) -> Result<Self> {
         ModuleCache::with_initial_nodes(resolver, resolver.all_paths())
     }
 
     /// Construct the cache by going through the specified entry point only.
     ///
-    /// This will create a smaller graph with only the imports reachable from the
-    /// specified entry point.
+    /// This will create a smaller graph with only the imports reachable from
+    /// the specified entry point.
     pub fn with_entry_point<P: AsRef<Path>, R: ModuleResolver>(
         resolver: &R,
         entry_point: P,
@@ -45,7 +46,8 @@ impl ModuleCache {
         ModuleCache::with_initial_nodes(resolver, Some(entry_point))
     }
 
-    // Generic constructor that evaluates edges going out of all the supplied import paths.
+    // Generic constructor that evaluates edges going out of all the supplied import
+    // paths.
     fn with_initial_nodes<P: AsRef<Path>, R: ModuleResolver>(
         resolver: &R,
         nodes: impl IntoIterator<Item = P>,
