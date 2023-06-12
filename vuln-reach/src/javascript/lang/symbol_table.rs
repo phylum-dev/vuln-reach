@@ -18,22 +18,30 @@ pub struct Scope<'a> {
 }
 
 impl<'a> Scope<'a> {
+    /// The nesting level of the scope. 0 is the scope for the `program` node.
     pub fn level(&self) -> usize {
         self.level
     }
 
+    /// The tree node for this scope.
     pub fn node(&self) -> Node<'a> {
         self.node
     }
 
+    /// The names that are defined in this scope.
     pub fn names(&self) -> &HashSet<Node<'a>> {
         &self.names
     }
 
+    /// Add a symbol to the names in the scope.
     pub fn define(&mut self, symbol: Node<'a>) {
         self.names.insert(symbol);
     }
 
+    /// Lookup a symbol by name.
+    ///
+    /// Find the node among the `names` whose representation is equivalent to
+    /// the supplied string.
     pub fn lookup_by_name(&self, name: &str, tree: &Tree) -> HashSet<Node<'a>> {
         self.names.iter().filter(|&&n| tree.repr_of(n) == name).copied().collect()
     }
@@ -50,11 +58,19 @@ struct SymbolTableBuilder<'a> {
 
 impl<'a> SymbolTableBuilder<'a> {
     fn build(tree: &'a Tree) -> SymbolTable<'a> {
+        // Instantiate an empty builder.
         let mut visitor = SymbolTableBuilder::default();
+
+        // Recursively visit all the nodes in the tree, starting from the root.
         visitor.visit(tree.root_node());
 
+        // Reverse the scope table. This makes it so that the first scope is the
+        // `program` node's scope.
         visitor.scope_table = visitor.scope_table.into_iter().rev().collect();
 
+        // Create a dictionary that associates each scope node to its index
+        // in the scope table. This dictionary can be accessed in O(1) to retrieve
+        // the scope object pertaining to a given scope node.
         let scope_indices = visitor
             .scope_table
             .iter()
@@ -78,10 +94,15 @@ impl<'a> SymbolTableBuilder<'a> {
         table
     }
 
+    // Retrieve the root scope, the only one that has a level of 0.
+    // TODO can we assume that this is always the first scope on the stack?
+    // If so, this could be changed to `self.scope_stack.first_mut().unwrap()`.
     fn root_scope(&mut self) -> &mut Scope<'a> {
         self.scope_stack.iter_mut().find(|scope| scope.level == 0).unwrap()
     }
 
+    // Starting from the end of the scope stack, find the first scope that's a
+    // function; default to the program scope if none is found.
     fn find_parent_function_scope(&mut self) -> Option<&mut Scope<'a>> {
         self.scope_stack.iter_mut().rev().find(|scope| {
             if scope.level == 0 {
@@ -103,6 +124,8 @@ impl<'a> SymbolTableBuilder<'a> {
         })
     }
 
+    // Push a scope on the stack, and increment the current level.
+    // This operation happens when entering a new scope.
     fn push_scope(&mut self, node: Node<'a>) {
         self.scope_stack.push(Scope {
             node,
@@ -113,16 +136,21 @@ impl<'a> SymbolTableBuilder<'a> {
         self.cur_level += 1;
     }
 
+    // Pop the last scope off the stack, add it to the scope table, and decrease the
+    // current level. This operation happens when leaving a scope.
     fn pop_scope(&mut self) {
         self.scope_table.push(self.scope_stack.pop().unwrap());
         self.cur_level -= 1;
     }
 
+    // Visit a node.
     fn visit(&mut self, node: Node<'a>) {
+        // If the node has already been visited, return.
         if self.visited_nodes.contains(&node) {
             return;
         }
 
+        // Insert the node among those that have been visited.
         self.visited_nodes.insert(node);
 
         match node.kind() {
@@ -133,6 +161,11 @@ impl<'a> SymbolTableBuilder<'a> {
 
                 let mut cur_node = node.prev_named_sibling();
 
+                // Move leftwards through the sibling nodes, searching for a
+                // node of kind `formal_parameters`. If one is found, visit it:
+                // that will define the identifiers that are found in the formal
+                // parameters list as variables that are available in the scope
+                // we just defined.
                 while let Some(node) = cur_node {
                     if node.kind() == "formal_parameters" {
                         self.visit(node);
@@ -140,13 +173,22 @@ impl<'a> SymbolTableBuilder<'a> {
                     cur_node = node.prev_named_sibling();
                 }
 
+                // Visit all of the children nodes of this scope.
                 self.visit_children(node);
+
+                // Exit the scope.
                 self.pop_scope();
             },
             "function_declaration" | "generator_function_declaration" | "class_declaration" => {
                 // Function declarations show up in the parent *function* scope.
+
+                // Find the name of the function.
                 let name = node.child_by_field_name(b"name").unwrap();
+
+                // Find the parent function scope of this declaration.
                 let scope = self.find_parent_function_scope().unwrap();
+
+                // Define the name of the function in that scope.
                 scope.define(name);
 
                 // Prioritize visiting the statement block and then the formal parameters.
@@ -154,12 +196,20 @@ impl<'a> SymbolTableBuilder<'a> {
             },
             "variable_declaration" => {
                 // Variable declarations show up in the parent *function* scope.
+
+                // Loop through the `variable_declarator` child nodes of this node.
                 for declarator_node in node.named_children(&mut node.walk()) {
                     if declarator_node.kind() != "variable_declarator" {
                         continue;
                     }
+
+                    // Retrieve the identifier of the declarator.
                     let name = declarator_node.child_by_field_name(b"name").unwrap();
+
+                    // Find the parent function scope of this declaration.
                     let scope = self.find_parent_function_scope().unwrap();
+
+                    // Define the identifier of the declaration in the found scope.
                     scope.define(name);
                 }
 
@@ -168,12 +218,20 @@ impl<'a> SymbolTableBuilder<'a> {
             "lexical_declaration" => {
                 // Lexical declarations (const, let) show up in the parent *lexical* scope,
                 // i.e. if/for blocks etc.
+
+                // Loop through the `variable_declarator` child nodes of this node.
                 for declarator_node in node.named_children(&mut node.walk()) {
                     if declarator_node.kind() != "variable_declarator" {
                         continue;
                     }
+
+                    // Retrieve the current scope from the stack.
                     let scope = self.scope_stack.last_mut().unwrap();
+
+                    // Retrieve the name of the declaration.
                     let name = declarator_node.child_by_field_name(b"name").unwrap();
+
+                    // Define the name in the current scope.
                     scope.define(name);
                 }
 
@@ -190,8 +248,13 @@ impl<'a> SymbolTableBuilder<'a> {
                 self.visit_children(node);
             },
             "formal_parameters" => {
-                // Formal parameters show up in the sibling function scope.
+                // Formal parameters show up in the sibling function scope, which is also the
+                // current scope.
+
+                // Retrieve the current scope.
                 let scope = self.scope_stack.last_mut().unwrap();
+
+                // Define each formal parameter's identifier in the current scope.
                 for i in 0..node.named_child_count() {
                     let parameter_name = node.named_child(i).unwrap();
                     scope.define(parameter_name);
@@ -205,6 +268,8 @@ impl<'a> SymbolTableBuilder<'a> {
 
                     // Define catch parameter for its block.
                     let scope = self.scope_stack.last_mut().unwrap();
+
+                    // Define the catch parameter in the current scope.
                     if let Some(catch_param) = node.child_by_field_name(b"parameter") {
                         scope.define(catch_param);
                     }
@@ -218,10 +283,15 @@ impl<'a> SymbolTableBuilder<'a> {
             },
             "import_specifier" => {
                 // import { a, b as c } from 'foo'
-                //
-                // Define alias, if it exists, name otherwise, in the root scope.
+
+                // Retrieve the root scope, as that's where all imports are defined.
                 let scope = self.root_scope();
 
+                // If there is an alias, define that in the root scope; otherwise,
+                // define the name. In the example above, the imported `b` would be
+                // defined as the node `c` in the root scope because it has an alias, and the
+                // imported `a` would be defined as itself because it has no
+                // alias.
                 let name = node.child_by_field_name(b"name").unwrap();
                 let alias = node.child_by_field_name(b"alias");
                 scope.define(alias.unwrap_or(name));
@@ -231,11 +301,12 @@ impl<'a> SymbolTableBuilder<'a> {
             "namespace_import" | "import_clause" => {
                 // import something from 'foo'
                 // import * as something from 'foo'
-                //
-                // For namespace imports and import clauses, directly put
-                // immediate `identifier` children nodes in the root scope.
+
+                // Retrieve the root scope, as that's where all imports are defined.
                 let scope = self.root_scope();
 
+                // For namespace imports and import clauses, directly put
+                // immediate `identifier` children nodes in the root scope.
                 for i in 0..node.named_child_count() {
                     let identifier = node.named_child(i).unwrap();
                     if identifier.kind() == "identifier" {
@@ -246,6 +317,7 @@ impl<'a> SymbolTableBuilder<'a> {
                 self.visit_children(node);
             },
             _ => {
+                // Recursively keep visiting children for all the other kinds of nodes.
                 self.visit_children(node);
             },
         }
@@ -293,6 +365,7 @@ impl<'a> SymbolTable<'a> {
         }
     }
 
+    /// Retrieve the scope object for a given scope node.
     pub fn get_scope(&self, scope: Node<'a>) -> Option<&Scope<'a>> {
         self.scope_indices.get(&scope).and_then(|&idx| self.scopes.get(idx))
     }
@@ -365,19 +438,33 @@ impl<'a> SymbolTable<'a> {
         // layers until a scope with the node name is declared.
         let (decl_scope, decl_node) =
             loop {
+                // Retrieve the scope.
                 let scope = &self.scopes[parent_scope_index];
+
+                // If the scope contains a declaration named like the node we are looking up,
+                // return the scope and the declaration node.
                 if let Some(decl_node) = scope.names.iter().find_map(|&node| {
                     if self.tree.repr_of(node) == name { Some(node) } else { None }
                 }) {
                     break (scope, decl_node);
                 }
 
+                // If we walked all the way to the program node, we haven't found the
+                // declaration. We can directly return `None` from here.
                 if parent_scope_index == 0 {
                     return None;
                 }
 
                 let cur_level = scope.level;
+
                 // Walking backwards, find the first scope with level less than the current.
+                //
+                // This assumes that:
+                // - all the sibling scopes have the same level as cur_level,
+                // - all scopes appear to the right of their parent scope in self.scopes
+                // - all scopes' siblings appear contiguously
+                // - no scopes of level less than or equal to the parent's level appear between
+                //   a parent scope and its child scopes
                 while parent_scope_index > 0 && self.scopes[parent_scope_index].level >= cur_level {
                     parent_scope_index -= 1;
                 }
