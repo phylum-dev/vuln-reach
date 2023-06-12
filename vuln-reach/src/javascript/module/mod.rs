@@ -37,6 +37,8 @@ impl<'a> PathToExport<'a> {
     }
 }
 
+/// A module object. It contains all information about symbols, accesses, imports and exports and
+/// is self-referencing.
 #[self_referencing]
 pub struct Module {
     tree: Tree,
@@ -99,24 +101,31 @@ impl Module {
         self.borrow_accesses()
     }
 
+    // Find paths to ES Module exports.
     fn paths_to_exports_esm<'a>(
         &'a self,
         source: Node<'a>,
         exports: &'a EsmExports,
     ) -> Result<Vec<PathToExport<'a>>> {
         let mut export_nodes = HashSet::new();
+
+        // If there is a default export, add its node to the set.
         if let Some(export) = exports.default.as_ref() {
             export_nodes.insert(export.node());
         }
 
+        // Add all exported objects' nodes to the set.
         for export in exports.objects.values() {
             export_nodes.insert(export.node());
         }
 
+        // Compute paths to all ESM export nodes.
         Ok(self
             .accesses()
             .compute_paths(
                 |access| {
+                    // An access is a target if either its node or its scope are in the set
+                    // of export nodes.
                     export_nodes.contains(&access.node) || export_nodes.contains(&access.scope)
                 },
                 source,
@@ -124,8 +133,12 @@ impl Module {
             .into_iter()
             .map(|access_path| {
                 let last_node = access_path.last().unwrap();
-                // Override default export name.
+                // The name of this path to export is either "default" or the name of the
+                // last identifier in the path.
                 let name = match exports.default.as_ref() {
+                    // TODO This extra condition makes it so that `export default foo`
+                    // has "foo" instead of "default" as name. Is that correct? Check
+                    // failing ignored test below.
                     Some(default) if default.node() == last_node.access().scope => "default",
                     _ => self.tree().repr_of(last_node.accessed()),
                 };
@@ -135,6 +148,7 @@ impl Module {
             .collect())
     }
 
+    // Find paths to CommonJS exports.
     fn paths_to_exports_cjs<'a>(
         &'a self,
         source: Node<'a>,
@@ -144,7 +158,8 @@ impl Module {
             .accesses()
             .compute_paths(
                 |access| {
-                    // export_nodes.contains(&access.node) || export_nodes.contains(&access.scope)
+                    // Depending on which kind of export we have in this module, run a different
+                    // check against the current access to determine whether that is a target.
                     match exports {
                         CommonJsExports::Name(n) => access.node == *n,
                         CommonJsExports::Scope(s) => access.scope == *s,
@@ -160,6 +175,7 @@ impl Module {
             .map(|access_path| {
                 let last_access = access_path.last().unwrap();
 
+                // Determine the name of the exported node in the path.
                 let (name, export) = match exports {
                     &CommonJsExports::Name(n) => (self.tree().repr_of(n), n),
                     &CommonJsExports::Scope(s) => ("<scope>", s),
@@ -181,6 +197,7 @@ impl Module {
             .collect())
     }
 
+    // Find paths to side effects, i.e. nodes that are always accessed when importing a module.
     fn paths_to_side_effects<'a>(&'a self, source: Node<'a>) -> Result<Vec<PathToExport<'a>>> {
         Ok(self
             .accesses()
@@ -189,6 +206,7 @@ impl Module {
             .map(|access_path| {
                 let last_access = access_path.last().unwrap().access();
 
+                // The name of this path is the representation of its access node.
                 let effect_node = last_access.node;
                 let name = self.tree().repr_of(effect_node);
 
@@ -197,12 +215,16 @@ impl Module {
             .collect())
     }
 
+    // Find the paths to exports for all kinds of modules.
     pub(crate) fn paths_to_exports<'a>(
         &'a self,
         source: Node<'a>,
     ) -> Result<Vec<PathToExport<'a>>> {
+        // Always include paths to side effects.
         let mut paths = self.paths_to_side_effects(source)?;
 
+        // Check which kind of exports were found for this module, then find the paths to those
+        // exports. This assumes that ES Module exports and CommonJS exports can't coexist.
         match self.exports() {
             Exports::Esm(exports) => paths.extend(self.paths_to_exports_esm(source, exports)?),
             Exports::CommonJs(exports) => paths.extend(self.paths_to_exports_cjs(source, exports)?),
@@ -299,6 +321,86 @@ mod tests {
 
             buf
         }
+    }
+
+    #[ignore]
+    #[test]
+    fn test_paths_to_exports_mjs_default_function() {
+        let module = Module::try_from(
+            Tree::new(dedent(
+                r#"
+                const foo = 3
+
+                function bar() {
+                    const c = foo
+                }
+
+                export default function() {
+                    bar()
+                }
+                "#,
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let paths = module
+            .paths_to_exports(
+                module
+                    .tree()
+                    .root_node()
+                    .descendant_for_point_range(Point::new(1, 6), Point::new(1, 8))
+                    .unwrap(),
+            )
+            .unwrap()
+            .into_iter()
+            .filter(|path| matches!(path, PathToExport::Esm { .. }))
+            .collect::<Vec<_>>();
+
+        assert_eq!(paths.len(), 1);
+
+        let path = paths.into_iter().next().unwrap();
+        println!("{}", path.repr(module.tree()));
+        assert_eq!(path.name(), "default");
+    }
+
+    #[ignore]
+    #[test]
+    fn test_paths_to_exports_mjs_default_binding() {
+        let module = Module::try_from(
+            Tree::new(dedent(
+                r#"
+                const foo = 3
+
+                function bar() {
+                    const c = foo
+                }
+
+                export default bar
+                "#,
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let paths = module
+            .paths_to_exports(
+                module
+                    .tree()
+                    .root_node()
+                    .descendant_for_point_range(Point::new(1, 6), Point::new(1, 8))
+                    .unwrap(),
+            )
+            .unwrap()
+            .into_iter()
+            .filter(|path| matches!(path, PathToExport::Esm { .. }))
+            .collect::<Vec<_>>();
+
+        assert_eq!(paths.len(), 1);
+
+        let path = paths.into_iter().next().unwrap();
+        println!("{}", path.repr(module.tree()));
+        assert_eq!(path.name(), "default");
     }
 
     #[test]
