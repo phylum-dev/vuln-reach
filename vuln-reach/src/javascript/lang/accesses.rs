@@ -113,7 +113,7 @@ impl<'a> AccessGraph<'a> {
                 let decl_scope = decl_scope.node();
 
                 // Get the scope of the next parent accessing this node.
-                let accessor = AccessGraph::find_accessor(symbol_table, &mut cursor_cache, node)
+                let accessor = AccessGraph::find_accessor(&mut cursor_cache, node)
                     .and_then(|node| {
                         let cursor = cursor_cache.cursor(node).ok()?;
                         symbol_table.lookup(cursor)
@@ -131,96 +131,66 @@ impl<'a> AccessGraph<'a> {
         Self { accesses, tree }
     }
 
-    // An `accessor` of `node` is defined here as a node which is either:
-    // - The identifier of the function surrounding the statement that `node` is in
-    // - The scope of the function surrounding the statement that `node` is in (let
-    //   something = function() { I access `node` }; something()) This is a special
-    //   case and won't yield an identifier, so it will have to be filtered by
-    //   `compute_paths` which requires identifiers.
-    // - The leftmost identifier in a LHS, if `node` is in a RHS
-    // - The identifier of a class name, if the node is accessed in one of its
-    //   methods
-    //
-    // This definition is brittle. Other unaccounted for cases:
-    // - something[3] = function { I access `node` }; something[3]()
-    // - `node` appears as a function call parameter
-    // - { functionName() { } }
-    //
-    // This is a good spot to improve, but requires deeply thinking about
-    // use cases, as "access" does not have a well-defined meaning statically.
-    fn find_accessor(
-        symbol_table: &SymbolTable<'a>,
-        cursor_cache: &mut TreeCursorCache<'a>,
-        node: Node<'a>,
-    ) -> Option<Node<'a>> {
-        // Determine the scope the identifier is in.
-        let parent_scope = Self::find_parent_scope(symbol_table, cursor_cache, node);
+    /// Find the parent identifier of a node.
+    ///
+    /// This function recursively searches the AST upwards from a node to find
+    /// the next identifier accessing the node.
+    ///
+    /// ```js,ignore
+    /// function bar() { }
+    ///
+    /// var foo = () => {
+    ///   test = bar();
+    /// }
+    ///
+    /// function baz() {
+    ///   test();
+    /// }
+    /// ```
+    ///
+    /// In the above example the accesses are as follows:
+    ///
+    ///  - function `bar`, `foo`, and `baz` are not accessed by anything, since
+    ///    they're defined at the root scope without any parents
+    ///  - assignment `test` is accessed by `foo`, since `foo` is the identifier
+    ///    for the lambda in which `test` is used
+    ///  - function call `bar` is accessed by `test`, since `test` is the next
+    ///    identifier (before `foo`)
+    ///  - function call `test` is accessed by `baz`
+    ///
+    /// NOTE: `test` in this example is not declared as variable and thus
+    /// hoisted to the global scope. This is why the accessor of `bar` cannot be
+    /// `foo`, otherwise the access from `baz` to `bar` would not be detected.
+    fn find_accessor(cursor_cache: &mut TreeCursorCache<'a>, node: Node<'a>) -> Option<Node<'a>> {
+        let cursor = cursor_cache.cursor(node).unwrap();
 
-        // Class declaration identifiers
-        if let Some(accessor) = parent_scope.and_then(|scope| {
-            let cursor = cursor_cache.cursor(scope).ok()?;
-            let class_decl = cursor.parents().find(|node| node.kind() == "class_declaration")?;
-            class_decl.child_by_field_name("name")
-        }) {
-            return Some(accessor);
-        }
-
-        // Functions and lambdas.
-        if let Some(accessor) = parent_scope.and_then(|scope| {
-            // Ensure parent node is a function.
-            let mut cursor = cursor_cache.cursor(scope).ok()?;
-            match cursor.goto_parent()?.kind() {
-                // Return parent accessor for anonymous functions.
-                "function" | "arrow_function" => {
-                    return Self::find_accessor(symbol_table, cursor_cache, cursor.node());
+        for (depth, parent) in cursor.parents().enumerate() {
+            match parent.kind() {
+                // Check depth to avoid declarations using themselves as accessor.
+                "class_declaration" | "function_declaration" if depth > 0 => {
+                    return parent.child_by_field_name("name");
                 },
-                // Return identifier for named functions.
-                "function_declaration" => return cursor.node().child_by_field_name("name"),
-                _ => None,
-            }
-        }) {
-            return Some(accessor);
-        }
+                "class" | "function" | "arrow_function" => {
+                    return Self::find_accessor(cursor_cache, parent);
+                },
+                "assignment_expression" | "augmented_assignment_expression" => {
+                    let lhs = parent.child_by_field_name(b"left").unwrap();
 
-        // Generic statement scopes
-        if let Some(accessor) = parent_scope {
-            return Some(accessor);
-        }
-
-        // LHS/RHS expressions
-        let lhs_rhs_cursor = cursor_cache.cursor(node).unwrap();
-        if let Some(expr) = lhs_rhs_cursor.parents().find(|node| {
-            matches!(node.kind(), "assignment_expression" | "augmented_assignment_expression")
-        }) {
-            let lhs = expr.child_by_field_name(b"left").unwrap();
-            // This is very crude. Get the leftmost node in an assignment expression,
-            // assuming that it is an identifier.
-            let accessor = lhs
-                .named_descendant_for_point_range(lhs.start_position(), lhs.start_position())
-                .unwrap();
-            assert!(accessor.kind() == "identifier" || accessor.kind() == "this");
-            return Some(accessor);
-        }
-
-        None
-    }
-
-    /// Find the parent scope of a node.
-    fn find_parent_scope(
-        symbol_table: &SymbolTable<'a>,
-        cursor_cache: &mut TreeCursorCache<'a>,
-        node: Node<'a>,
-    ) -> Option<Node<'a>> {
-        let mut parent_cursor = cursor_cache.cursor(node).unwrap();
-        while let Some(node) = parent_cursor.goto_parent() {
-            let parent = parent_cursor.parent()?;
-
-            if parent.child_by_field_name("body") == Some(node)
-                && symbol_table.get_scope(node).is_some()
-            {
-                return Some(node);
+                    if lhs.byte_range().contains(&node.start_byte()) {
+                        // Find next parent identifier if node is in LHS of the assignment.
+                        return Self::find_accessor(cursor_cache, parent);
+                    } else {
+                        // Use LHS identifier if node is in RHS of the assignment.
+                        return parent.named_descendant_for_point_range(
+                            lhs.start_position(),
+                            lhs.start_position(),
+                        );
+                    }
+                },
+                _ => (),
             }
         }
+
         None
     }
 
@@ -526,6 +496,59 @@ mod tests {
 
             function bar() {
                 leaked();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn hoisted_variable() {
+        let code = r#"
+            function foo() { }
+
+            function hoisting() {
+                test = foo;
+            }
+            hoisting();
+
+            function bar() {
+                test();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn anonymous_assigned_class() {
+        let code = r#"
+            function foo() { }
+
+            Test = class {
+                constructor() {
+                    foo();
+                }
+            };
+
+            function bar() {
+                new Test();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn named_class() {
+        let code = r#"
+            function foo() { }
+
+            class Test {
+                constructor() {
+                    foo();
+                }
+            };
+
+            function bar() {
+                new Test();
             }
         "#;
         assert!(is_reachable(code, "bar", "foo"));

@@ -1,5 +1,7 @@
 //! Table of symbols in a source file.
+
 use std::collections::{HashMap, HashSet};
+use std::mem;
 
 use itertools::Itertools;
 use tree_sitter::{Node, QueryCursor};
@@ -62,18 +64,16 @@ impl<'a> SymbolTableBuilder<'a> {
 
         let mut table = SymbolTable { tree, scopes: visitor.scope_table, scope_indices };
 
-        // TODO: This is extremely bad for performance and a massive hack.
-        let mut hoisted_globals = Vec::new();
-        for scope in &table.scopes {
-            for assignment in &scope.assignments {
-                if table.lookup(Cursor::new(tree, *assignment).unwrap()).is_none() {
-                    let name = assignment.child_by_field_name(b"left").unwrap();
-                    hoisted_globals.push(name);
+        // Hoist assignments which were not declared as variables.
+        for i in 0..table.scopes.len() {
+            let assignments = mem::take(&mut table.scopes[i].assignments);
+            for name in assignments {
+                let cursor = Cursor::new(tree, name).unwrap();
+                if table.lookup(cursor).is_none() {
+                    println!("HOISTING {:?}", name);
+                    table.scopes[0].define(name);
                 }
             }
-        }
-        for hoisted_global in hoisted_globals {
-            table.scopes[0].define(hoisted_global);
         }
 
         table
@@ -181,9 +181,12 @@ impl<'a> SymbolTableBuilder<'a> {
                 self.visit_children(node);
             },
             "assignment_expression" | "augmented_assignment_expression" => {
-                // Add assignments their scope, allowing identification of hoisted variables.
+                // Add assignments to their scope, allowing identification of hoisted variables.
                 let scope = self.find_parent_function_scope().unwrap();
-                scope.assignments.insert(node);
+                let name = node.child_by_field_name(b"left").unwrap();
+                if !scope.names.contains(&name) {
+                    scope.assignments.insert(name);
+                }
 
                 self.visit_children(node);
             },
