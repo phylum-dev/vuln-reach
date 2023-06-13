@@ -654,6 +654,185 @@ mod tests {
         assert!(is_reachable(code, "bar", "foo"));
     }
 
+    #[test]
+    fn class_getter() {
+        let code = r#"
+            function foo() { }
+
+            class Test {
+                get width() {
+                    foo();
+                }
+            };
+
+            function bar() {
+                var test = new Test();
+                test.width();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn class_static() {
+        let code = r#"
+            function foo() { }
+
+            class Test {
+                static func = foo;
+            };
+
+            function bar() {
+                Test.func();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn class_field_unreachable() {
+        let code = r#"
+            function foo() { }
+
+            var func = foo;
+
+            class Test {
+                func = 3;
+            };
+
+            function bar() {
+                Test.func();
+            }
+        "#;
+        assert!(!is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn class_field_private() {
+        let code = r#"
+            function foo() { }
+
+            class Test {
+                #func = foo;
+
+                constructor() {
+                    this.func();
+                }
+            };
+
+            function bar() {
+                new Test();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn class_inheritance() {
+        let code = r#"
+            function foo() { }
+
+            class Parent {
+                constructor() {
+                    foo();
+                }
+            }
+
+            class Test extends Parent {
+                constructor() {
+                    super();
+                }
+            };
+
+            function bar() {
+                new Test();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn class_field_inheritance() {
+        let code = r#"
+            function foo() { }
+
+            class Parent {
+                field = foo;
+            }
+
+            class Test extends Parent {
+                constructor() {
+                    super.field();
+                }
+            };
+
+            function bar() {
+                new Test();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn class_function_inheritance() {
+        let code = r#"
+            function foo() { }
+
+            class Parent {
+                proxy() {
+                    foo();
+                }
+            }
+
+            class Test extends Parent {
+                constructor() {
+                    super.proxy();
+                }
+            };
+
+            function bar() {
+                new Test();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn class_function() {
+        let code = r#"
+            function foo() { }
+
+            class Test {
+                proxy() {
+                    foo();
+                }
+            };
+
+            function bar() {
+                new Test().proxy();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn class_generator() {
+        let code = r#"
+            function foo() { }
+
+            class Test {
+                *proxy() {
+                    yield foo();
+                }
+            };
+
+            function bar() {
+                new Test().proxy();
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
     /// Check if the `origin` node is able to reach the `target` node.
     fn is_reachable(code: &str, origin: &str, target: &str) -> bool {
         // Find node ranges for start and end.
