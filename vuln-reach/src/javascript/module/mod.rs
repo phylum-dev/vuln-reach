@@ -136,9 +136,6 @@ impl Module {
                 // The name of this path to export is either "default" or the name of the
                 // last identifier in the path.
                 let name = match exports.default.as_ref() {
-                    // TODO This extra condition makes it so that `export default foo`
-                    // has "foo" instead of "default" as name. Is that correct? Check
-                    // failing ignored test below.
                     Some(default) if default.node() == last_node.access().scope => "default",
                     _ => self.tree().repr_of(last_node.accessed()),
                 };

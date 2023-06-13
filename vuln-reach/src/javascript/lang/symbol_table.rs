@@ -95,8 +95,6 @@ impl<'a> SymbolTableBuilder<'a> {
     }
 
     // Retrieve the root scope, the only one that has a level of 0.
-    // TODO can we assume that this is always the first scope on the stack?
-    // If so, this could be changed to `self.scope_stack.first_mut().unwrap()`.
     fn root_scope(&mut self) -> &mut Scope<'a> {
         self.scope_stack.iter_mut().find(|scope| scope.level == 0).unwrap()
     }
@@ -436,39 +434,42 @@ impl<'a> SymbolTable<'a> {
         //
         // Starting from the parent scope's index, walk back through the parent
         // layers until a scope with the node name is declared.
-        let (decl_scope, decl_node) =
-            loop {
-                // Retrieve the scope.
-                let scope = &self.scopes[parent_scope_index];
+        let (decl_scope, decl_node) = loop {
+            // Retrieve the scope.
+            let scope = &self.scopes[parent_scope_index];
 
-                // If the scope contains a declaration named like the node we are looking up,
-                // return the scope and the declaration node.
-                if let Some(decl_node) = scope.names.iter().find_map(|&node| {
-                    if self.tree.repr_of(node) == name { Some(node) } else { None }
-                }) {
-                    break (scope, decl_node);
+            // If the scope contains a declaration named like the node we are looking up,
+            // return the scope and the declaration node.
+            if let Some(decl_node) = scope.names.iter().find_map(|&node| {
+                if self.tree.repr_of(node) == name {
+                    Some(node)
+                } else {
+                    None
                 }
+            }) {
+                break (scope, decl_node);
+            }
 
-                // If we walked all the way to the program node, we haven't found the
-                // declaration. We can directly return `None` from here.
-                if parent_scope_index == 0 {
-                    return None;
-                }
+            // If we walked all the way to the program node, we haven't found the
+            // declaration. We can directly return `None` from here.
+            if parent_scope_index == 0 {
+                return None;
+            }
 
-                let cur_level = scope.level;
+            let cur_level = scope.level;
 
-                // Walking backwards, find the first scope with level less than the current.
-                //
-                // This assumes that:
-                // - all the sibling scopes have the same level as cur_level,
-                // - all scopes appear to the right of their parent scope in self.scopes
-                // - all scopes' siblings appear contiguously
-                // - no scopes of level less than or equal to the parent's level appear between
-                //   a parent scope and its child scopes
-                while parent_scope_index > 0 && self.scopes[parent_scope_index].level >= cur_level {
-                    parent_scope_index -= 1;
-                }
-            };
+            // Walking backwards, find the first scope with level less than the current.
+            //
+            // This assumes that:
+            // - all the sibling scopes have the same level as cur_level,
+            // - all scopes appear to the right of their parent scope in self.scopes
+            // - all scopes' siblings appear contiguously
+            // - no scopes of level less than or equal to the parent's level appear between
+            //   a parent scope and its child scopes
+            while parent_scope_index > 0 && self.scopes[parent_scope_index].level >= cur_level {
+                parent_scope_index -= 1;
+            }
+        };
 
         Some((decl_scope, decl_node))
     }

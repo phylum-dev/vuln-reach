@@ -346,10 +346,6 @@ impl<'a> AccessGraph<'a> {
                 // }
                 // ```
                 if let Some(accessor) = declaration_access.accessor.filter(|node| {
-                    // TODO The only spot where the current implementation
-                    // of [`Self::find_accessor`] can potentially emit non-`identifier` nodes is
-                    // in the LHS/RHS case, if the leftmost node ends up not being an `identifier`.
-                    // We should check the grammar to understand whether that can ever happen.
                     if node.kind() != "identifier" {
                         return false;
                     }
