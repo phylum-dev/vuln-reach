@@ -16,11 +16,9 @@ type AbsoluteSpec = PathBuf;
 pub struct ModuleCache {
     /// The dictionary that maps absolute import specs to Module objects.
     cache: HashMap<AbsoluteSpec, Module>,
-    /// The graph of relationships. Associate to each module spec a mapping
-    /// between the spec that they use to import a module and the absolute
-    /// spec that that represents.
+    /// The graph of import relationships.
     ///
-    /// For example, if `foo/bar/baz.js` imports `../quux.js`, there will
+    /// Example: if `foo/bar/baz.js` imports `../quux.js`, there will
     /// be a mapping of the form
     /// ```js
     /// { "foo/bar/baz.js": { "../quux.js": "foo/quux.js" } }
