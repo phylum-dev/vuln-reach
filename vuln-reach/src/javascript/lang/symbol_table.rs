@@ -200,11 +200,20 @@ impl<'a> SymbolTableBuilder<'a> {
             "catch_clause" => {
                 // Catch clause identifier has to be registered in the child statement block.
                 if let Some(catch_statement) = node.child_by_field_name(b"body") {
-                    self.visit(catch_statement);
+                    // Create scope for catch block.
+                    self.push_scope(catch_statement);
+
+                    // Define catch parameter for its block.
                     let scope = self.scope_stack.last_mut().unwrap();
                     if let Some(catch_param) = node.child_by_field_name(b"parameter") {
                         scope.define(catch_param);
                     }
+
+                    // Parse catch block children.
+                    self.visit_children(catch_statement);
+
+                    // Go back to parent scope.
+                    self.pop_scope();
                 }
             },
             "import_specifier" => {
@@ -299,22 +308,37 @@ impl<'a> SymbolTable<'a> {
 
         let name = self.tree.repr_of(node);
 
-        // If the identifier is in a formal parameters list, the declaration
-        // scope is in the sibling "body" field block.
+        // For function parameters, the scope is the function body.
         let mut parent = cursor.goto_parent().unwrap();
         if parent.kind() == "formal_parameters" {
-            // If formal_parameters nodes has a statement_block next sibling, it is a
-            // regular function, otherwise it is an arrow function and the
-            // identifier doesn't belong to a scope.
-
+            // Get function body.
             let grandparent = cursor.clone().goto_parent().unwrap();
             let body = grandparent.child_by_field_name("body").unwrap();
+
             if body.kind() == "statement_block" {
-                let scope_index = *self.scope_indices.get(&body).unwrap();
-                let scope = &self.scopes[scope_index];
+                // Get scope and ensure the identifier is defined in it.
+                let scope = self.get_scope(body).unwrap();
                 assert!(scope.names.iter().any(|&node| self.tree.repr_of(node) == name));
+
                 return Some((scope, node));
+            } else {
+                // Lambda parameters without body do not belong to any scope.
+                //
+                // Example: `(param) => console.log(param);`
+                return None;
             }
+        }
+
+        // For parameters in a catch clause, the scope is the catch body.
+        if parent.kind() == "catch_clause" {
+            // Get catch body.
+            let body = parent.child_by_field_name("body").unwrap();
+
+            // Get scope and ensure the identifier is defined in it.
+            let scope = self.get_scope(body).unwrap();
+            assert!(scope.names.iter().any(|&node| self.tree.repr_of(node) == name));
+
+            return Some((scope, node));
         }
 
         // Find parent scope node. Guaranteed to exist: "program" is the topmost and

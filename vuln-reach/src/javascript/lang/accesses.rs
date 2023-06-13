@@ -833,6 +833,91 @@ mod tests {
         assert!(is_reachable(code, "bar", "foo"));
     }
 
+    #[test]
+    fn try_block() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                try {
+                    foo();
+                } catch(error) {
+                }
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn catch_block() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                try {
+                } catch(error) {
+                    foo();
+                }
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn catch_variable_unreachable() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                try {
+                } catch(foo) {
+                    foo();
+                }
+            }
+        "#;
+        assert!(!is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn try_catch_separate_scopes() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                try {
+                    let foo = 13;
+                } catch(error) {
+                    foo();
+                }
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn catch_variable_not_leaking() {
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                foo();
+                try { } catch(foo) { }
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+
+        let code = r#"
+            function foo() { }
+
+            function bar() {
+                try {
+                    foo();
+                } catch(foo) { }
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
     /// Check if the `origin` node is able to reach the `target` node.
     fn is_reachable(code: &str, origin: &str, target: &str) -> bool {
         // Find node ranges for start and end.
@@ -859,6 +944,7 @@ mod tests {
         let tree = Tree::new(code.into()).unwrap();
         let st = SymbolTable::new(&tree);
         let accesses = AccessGraph::new(&tree, &st);
+        st.pretty_display();
 
         // Get the tree nodes for the origin and target.
         let origin_node =
