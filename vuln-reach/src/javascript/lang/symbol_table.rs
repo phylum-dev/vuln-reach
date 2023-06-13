@@ -18,7 +18,9 @@ pub struct Scope<'a> {
 }
 
 impl<'a> Scope<'a> {
-    /// The nesting level of the scope. 0 is the scope for the `program` node.
+    /// The nesting level of the scope.
+    ///
+    /// `0` is the scope for the `program` node.
     pub fn level(&self) -> usize {
         self.level
     }
@@ -58,7 +60,6 @@ struct SymbolTableBuilder<'a> {
 
 impl<'a> SymbolTableBuilder<'a> {
     fn build(tree: &'a Tree) -> SymbolTable<'a> {
-        // Instantiate an empty builder.
         let mut visitor = SymbolTableBuilder::default();
 
         // Recursively visit all the nodes in the tree, starting from the root.
@@ -69,8 +70,7 @@ impl<'a> SymbolTableBuilder<'a> {
         visitor.scope_table = visitor.scope_table.into_iter().rev().collect();
 
         // Create a dictionary that associates each scope node to its index
-        // in the scope table. This dictionary can be accessed in O(1) to retrieve
-        // the scope object pertaining to a given scope node.
+        // in the scope table.
         let scope_indices = visitor
             .scope_table
             .iter()
@@ -94,7 +94,7 @@ impl<'a> SymbolTableBuilder<'a> {
         table
     }
 
-    // Retrieve the root scope, the only one that has a level of 0.
+    /// Retrieve the root scope.
     fn root_scope(&mut self) -> &mut Scope<'a> {
         self.scope_stack.iter_mut().find(|scope| scope.level == 0).unwrap()
     }
@@ -171,7 +171,7 @@ impl<'a> SymbolTableBuilder<'a> {
                     cur_node = node.prev_named_sibling();
                 }
 
-                // Visit all of the children nodes of this scope.
+                // Visit all of the child nodes of this scope.
                 self.visit_children(node);
 
                 // Exit the scope.
@@ -183,10 +183,8 @@ impl<'a> SymbolTableBuilder<'a> {
                 // Find the name of the function.
                 let name = node.child_by_field_name(b"name").unwrap();
 
-                // Find the parent function scope of this declaration.
+                // Define the function's name in its parent's scope.
                 let scope = self.find_parent_function_scope().unwrap();
-
-                // Define the name of the function in that scope.
                 scope.define(name);
 
                 // Prioritize visiting the statement block and then the formal parameters.
@@ -204,11 +202,9 @@ impl<'a> SymbolTableBuilder<'a> {
                     // Retrieve the identifier of the declarator.
                     let name = declarator_node.child_by_field_name(b"name").unwrap();
 
-                    // Find the parent function scope of this declaration.
-                    let scope = self.find_parent_function_scope().unwrap();
-
-                    // Define the identifier of the declaration in the found scope.
-                    scope.define(name);
+                // Define the function's name in its parent's scope.
+                let scope = self.find_parent_function_scope().unwrap();
+                scope.define(name);
                 }
 
                 self.visit_children(node);

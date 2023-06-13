@@ -266,11 +266,9 @@ impl<'a> AccessGraph<'a> {
         let mut visited = HashSet::new();
 
         // Collect accesses in a dictionary where the key is the accessed
-        // identifier. This makes it so that retrieving an access via the identifier is
-        // O(1).
+        // identifier.
         //
-        // This is different from `self.accesses`, which is a dictionary of vectors
-        // (rather than single elements) where the key is the _declaration_ node (rather
+        // This is different from `self.accesses`, where the key is the _declaration_ node (rather
         // than the _accessed_ node).
         let access_scopes = self
             .accesses
@@ -279,7 +277,6 @@ impl<'a> AccessGraph<'a> {
             .map(|access| (access.node, access))
             .collect::<HashMap<_, _>>();
 
-        // Repeat until the queue is empty.
         while let Some((node, path)) = bfs_q.pop_front() {
             // Skip if we already visited this node.
             if visited.contains(&node) {
@@ -300,9 +297,7 @@ impl<'a> AccessGraph<'a> {
             })?;
 
             // Retrieve the accesses linked to the declaration node from the access above.
-            // Similarly to the statement above, there should be an entry in `self.accesses`
-            // for each declaration node. If that is not the case, this is a bug; report
-            // the error.
+            // Ensure every declaration node has an entry in `self.accesses`.
             let declaration_accesses = self.accesses.get(&access.decl_node).ok_or_else(|| {
                 Error::Generic(format!(
                     "All declarations should have a list of accesses: {:?} {}",
@@ -326,10 +321,9 @@ impl<'a> AccessGraph<'a> {
                     found_paths.push(path.to_vec());
                 }
 
-                // Push suitable accessors to the current node at the bottom of the queue.
+                // Push suitable accessors of the current node to the bottom of the queue.
                 //
-                // A suitable accessor is a node of kind "identifier" which is also not inside
-                // of a list of formal parameters.
+                // A suitable accessor is a node of kind "identifier" which is also not a function parameter.
                 //
                 // In the following example, the arguments inside of the parentheses are
                 // identifiers, but not accesses, as they serve the sole purpose of defining

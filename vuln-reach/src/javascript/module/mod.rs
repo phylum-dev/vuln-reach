@@ -101,7 +101,7 @@ impl Module {
         self.borrow_accesses()
     }
 
-    // Find paths to ES Module exports.
+    /// Find paths to ES Module exports.
     fn paths_to_exports_esm<'a>(
         &'a self,
         source: Node<'a>,
@@ -145,7 +145,7 @@ impl Module {
             .collect())
     }
 
-    // Find paths to CommonJS exports.
+    /// Find paths to CommonJS exports.
     fn paths_to_exports_cjs<'a>(
         &'a self,
         source: Node<'a>,
@@ -194,8 +194,8 @@ impl Module {
             .collect())
     }
 
-    // Find paths to side effects, i.e. nodes that are always accessed when
-    // importing a module.
+    /// Find paths to side effects, i.e. nodes that are always accessed when
+    /// importing a module.
     fn paths_to_side_effects<'a>(&'a self, source: Node<'a>) -> Result<Vec<PathToExport<'a>>> {
         Ok(self
             .accesses()
@@ -213,7 +213,7 @@ impl Module {
             .collect())
     }
 
-    // Find the paths to exports for all kinds of modules.
+    /// Find the paths to exports for all kinds of modules.
     pub(crate) fn paths_to_exports<'a>(
         &'a self,
         source: Node<'a>,

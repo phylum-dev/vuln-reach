@@ -46,13 +46,13 @@ impl ModuleCache {
         ModuleCache::with_initial_nodes(resolver, Some(entry_point))
     }
 
-    // Generic constructor that evaluates edges going out of all the supplied import
-    // paths.
+    /// Generic constructor that evaluates edges going out of all the supplied import
+    /// paths.
     fn with_initial_nodes<P: AsRef<Path>, R: ModuleResolver>(
         resolver: &R,
         nodes: impl IntoIterator<Item = P>,
     ) -> Result<Self> {
-        // Create a queue and push to it all the supplied import paths.
+        // Create a queue and add all the supplied import paths.
         let mut q = VecDeque::<(Option<PathBuf>, PathBuf)>::new();
         nodes.into_iter().for_each(|node| {
             q.push_back((None, node.as_ref().to_path_buf()));
@@ -61,12 +61,10 @@ impl ModuleCache {
         // Cache visited nodes (i.e. modules).
         let mut visited = HashSet::new();
 
-        // Initialize the empty objects.
         let mut cache = HashMap::default();
         let mut module_graph: HashMap<AbsoluteSpec, HashMap<RelativeSpec, AbsoluteSpec>> =
             HashMap::default();
 
-        // Loop until there are no more paths to evaluate.
         while !q.is_empty() {
             // Pick the top of the queue.
             let (current_module_spec, import_spec) = q.pop_front().unwrap();
