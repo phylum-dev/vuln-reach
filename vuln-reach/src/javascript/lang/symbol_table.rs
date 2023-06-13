@@ -123,8 +123,7 @@ impl<'a> SymbolTableBuilder<'a> {
             .unwrap()
     }
 
-    // Push a scope on the stack, and increment the current level.
-    // This operation happens when entering a new scope.
+    // Push a scope on the stack.
     fn push_scope(&mut self, node: Node<'a>) {
         self.scope_stack.push(Scope {
             node,
@@ -135,21 +134,22 @@ impl<'a> SymbolTableBuilder<'a> {
         self.cur_level += 1;
     }
 
-    // Pop the last scope off the stack, add it to the scope table, and decrease the
-    // current level. This operation happens when leaving a scope.
+    // Pop the last scope off the stack, and add it to the scope table.
     fn pop_scope(&mut self) {
         self.scope_table.push(self.scope_stack.pop().unwrap());
         self.cur_level -= 1;
     }
 
-    // Visit a node.
+    // Recursively visit a node in a depth-first fashion.
+    //
+    // Visiting a node alters the state of the scope tree by adding scopes and
+    // defining names according to the language semantics of each kind of node.
     fn visit(&mut self, node: Node<'a>) {
-        // If the node has already been visited, return.
+        // Each node is visited only once.
         if self.visited_nodes.contains(&node) {
             return;
         }
 
-        // Insert the node among those that have been visited.
         self.visited_nodes.insert(node);
 
         match node.kind() {
@@ -160,11 +160,7 @@ impl<'a> SymbolTableBuilder<'a> {
 
                 let mut cur_node = node.prev_named_sibling();
 
-                // Move leftwards through the sibling nodes, searching for a
-                // node of kind `formal_parameters`. If one is found, visit it:
-                // that will define the identifiers that are found in the formal
-                // parameters list as variables that are available in the scope
-                // we just defined.
+                // Visit a `formal_parameters` sibling node, if it exists.
                 while let Some(node) = cur_node {
                     if node.kind() == "formal_parameters" {
                         self.visit(node);
@@ -175,20 +171,16 @@ impl<'a> SymbolTableBuilder<'a> {
                 // Visit all of the child nodes of this scope.
                 self.visit_children(node);
 
-                // Exit the scope.
+                // Go back to the parent scope.
                 self.pop_scope();
             },
             "function_declaration" | "generator_function_declaration" | "class_declaration" => {
                 // Function declarations show up in the parent *function* scope.
 
-                // Find the name of the function.
                 let name = node.child_by_field_name(b"name").unwrap();
-
-                // Define the function's name in its parent's scope.
                 let scope = self.find_parent_function_scope();
                 scope.define(name);
 
-                // Prioritize visiting the statement block and then the formal parameters.
                 self.visit_children(node);
             },
             "variable_declaration" => {
@@ -200,10 +192,7 @@ impl<'a> SymbolTableBuilder<'a> {
                         continue;
                     }
 
-                    // Retrieve the identifier of the declarator.
                     let name = declarator_node.child_by_field_name(b"name").unwrap();
-
-                    // Define the function's name in its parent's scope.
                     let scope = self.find_parent_function_scope();
                     scope.define(name);
                 }
@@ -243,8 +232,7 @@ impl<'a> SymbolTableBuilder<'a> {
                 self.visit_children(node);
             },
             "formal_parameters" => {
-                // Formal parameters show up in the sibling function scope, which is also the
-                // current scope.
+                // Formal parameters show up in the scope of the function they belong to.
 
                 // Retrieve the current scope.
                 let scope = self.scope_stack.last_mut().unwrap();
@@ -264,7 +252,6 @@ impl<'a> SymbolTableBuilder<'a> {
                     // Define catch parameter for its block.
                     let scope = self.scope_stack.last_mut().unwrap();
 
-                    // Define the catch parameter in the current scope.
                     if let Some(catch_param) = node.child_by_field_name(b"parameter") {
                         scope.define(catch_param);
                     }
@@ -282,11 +269,8 @@ impl<'a> SymbolTableBuilder<'a> {
                 // Retrieve the root scope, as that's where all imports are defined.
                 let scope = self.root_scope();
 
-                // If there is an alias, define that in the root scope; otherwise,
-                // define the name. In the example above, the imported `b` would be
-                // defined as the node `c` in the root scope because it has an alias, and the
-                // imported `a` would be defined as itself because it has no
-                // alias.
+                // An import defines a name in the root scope. The name can be defined as
+                // itself or as an alias, if one is present.
                 let name = node.child_by_field_name(b"name").unwrap();
                 let alias = node.child_by_field_name(b"alias");
                 scope.define(alias.unwrap_or(name));
@@ -436,8 +420,8 @@ impl<'a> SymbolTable<'a> {
                 // Retrieve the scope.
                 let scope = &self.scopes[parent_scope_index];
 
-                // If the scope contains a declaration named like the node we are looking up,
-                // return the scope and the declaration node.
+                // Find a declaration with the same text representation as the name we are
+                // looking up.
                 if let Some(decl_node) = scope.names.iter().find_map(|&node| {
                     if self.tree.repr_of(node) == name { Some(node) } else { None }
                 }) {
@@ -452,14 +436,7 @@ impl<'a> SymbolTable<'a> {
 
                 let cur_level = scope.level;
 
-                // Walking backwards, find the first scope with level less than the current.
-                //
-                // This assumes that:
-                // - all the sibling scopes have the same level as cur_level,
-                // - all scopes appear to the right of their parent scope in self.scopes
-                // - all scopes' siblings appear contiguously
-                // - no scopes of level less than or equal to the parent's level appear between
-                //   a parent scope and its child scopes
+                // Walking upwards, find the first scope with level less than the current.
                 while parent_scope_index > 0 && self.scopes[parent_scope_index].level >= cur_level {
                     parent_scope_index -= 1;
                 }
