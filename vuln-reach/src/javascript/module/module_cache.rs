@@ -46,8 +46,8 @@ impl ModuleCache {
         ModuleCache::with_initial_nodes(resolver, Some(entry_point))
     }
 
-    /// Generic constructor that evaluates edges going out of all the supplied import
-    /// paths.
+    /// Generic constructor that evaluates edges going out of all the supplied
+    /// import paths.
     fn with_initial_nodes<P: AsRef<Path>, R: ModuleResolver>(
         resolver: &R,
         nodes: impl IntoIterator<Item = P>,

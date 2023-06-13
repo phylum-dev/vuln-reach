@@ -101,25 +101,26 @@ impl<'a> SymbolTableBuilder<'a> {
 
     // Starting from the end of the scope stack, find the first scope that's a
     // function; default to the program scope if none is found.
-    fn find_parent_function_scope(&mut self) -> Option<&mut Scope<'a>> {
-        self.scope_stack.iter_mut().rev().find(|scope| {
-            if scope.level == 0 {
-                return true;
-            }
+    fn find_parent_function_scope(&mut self) -> &mut Scope<'a> {
+        self.scope_stack
+            .iter_mut()
+            .rev()
+            .find(|scope| {
+                if scope.level == 0 {
+                    return true;
+                }
 
-            let parent = match scope.node.parent() {
-                Some(parent) => parent,
-                None => return false,
-            };
+                let parent = scope.node.parent().unwrap();
 
-            matches!(
-                parent.kind(),
-                "function_declaration"
-                    | "generator_function_declaration"
-                    | "function"
-                    | "generator_function"
-            )
-        })
+                matches!(
+                    parent.kind(),
+                    "function_declaration"
+                        | "generator_function_declaration"
+                        | "function"
+                        | "generator_function"
+                )
+            })
+            .unwrap()
     }
 
     // Push a scope on the stack, and increment the current level.
@@ -184,7 +185,7 @@ impl<'a> SymbolTableBuilder<'a> {
                 let name = node.child_by_field_name(b"name").unwrap();
 
                 // Define the function's name in its parent's scope.
-                let scope = self.find_parent_function_scope().unwrap();
+                let scope = self.find_parent_function_scope();
                 scope.define(name);
 
                 // Prioritize visiting the statement block and then the formal parameters.
@@ -202,9 +203,9 @@ impl<'a> SymbolTableBuilder<'a> {
                     // Retrieve the identifier of the declarator.
                     let name = declarator_node.child_by_field_name(b"name").unwrap();
 
-                // Define the function's name in its parent's scope.
-                let scope = self.find_parent_function_scope().unwrap();
-                scope.define(name);
+                    // Define the function's name in its parent's scope.
+                    let scope = self.find_parent_function_scope();
+                    scope.define(name);
                 }
 
                 self.visit_children(node);
@@ -233,7 +234,7 @@ impl<'a> SymbolTableBuilder<'a> {
             },
             "assignment_expression" | "augmented_assignment_expression" => {
                 // Add assignments to their scope, allowing identification of hoisted variables.
-                let scope = self.find_parent_function_scope().unwrap();
+                let scope = self.find_parent_function_scope();
                 let name = node.child_by_field_name(b"left").unwrap();
                 if !scope.names.contains(&name) {
                     scope.assignments.insert(name);

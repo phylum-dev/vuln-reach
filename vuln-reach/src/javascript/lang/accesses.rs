@@ -214,9 +214,9 @@ impl<'a> AccessGraph<'a> {
     ///
     /// The path finding algorithm is a breadth-first search based on a queue.
     /// The first node that is visited is the supplied source node.
-    /// Each element of the queue contains the node to be visited, and a node path
-    /// to start from. On each iteration, the node path is augmented with new edges,
-    /// cloned and forwarded to future iterations.
+    /// Each element of the queue contains the node to be visited, and a node
+    /// path to start from. On each iteration, the node path is augmented
+    /// with new edges, cloned and forwarded to future iterations.
     pub fn compute_paths<F>(
         &self,
         is_target: F,
@@ -236,8 +236,8 @@ impl<'a> AccessGraph<'a> {
         // Collect accesses in a dictionary where the key is the accessed
         // identifier.
         //
-        // This is different from `self.accesses`, where the key is the _declaration_ node (rather
-        // than the _accessed_ node).
+        // This is different from `self.accesses`, where the key is the _declaration_
+        // node (rather than the _accessed_ node).
         let access_scopes = self
             .accesses
             .values()
@@ -253,7 +253,8 @@ impl<'a> AccessGraph<'a> {
 
             visited_nodes.insert(node);
 
-            // Retrieve the access scope of the current node, which must exist for all identifiers.
+            // Retrieve the access scope of the current node, which must exist for all
+            // identifiers.
             let access = access_scopes.get(&node).copied().ok_or_else(|| {
                 Error::Generic(format!(
                     "All identifiers should have an access scope: {:?} {}",
@@ -272,22 +273,24 @@ impl<'a> AccessGraph<'a> {
                 ))
             })?;
 
-            // Create edges from the current node to all of its declaration node's accessors.
+            // Create edges from the current node to all of its declaration node's
+            // accessors.
             for declaration_access in declaration_accesses {
                 // Clone the path that leads to the current node.
                 let mut path = path.clone();
                 // Add an edge from the current node to the declaration node's access.
                 path.push(AccessEdge::new(node, *declaration_access));
 
-                // If the access is a target according to the supplied predicate, add the path to
-                // the list of found paths.
+                // If the access is a target according to the supplied predicate, add the path
+                // to the list of found paths.
                 if is_target(declaration_access) {
                     found_paths.push(path.to_vec());
                 }
 
                 // Push suitable accessors of the current node to the bottom of the queue.
                 //
-                // A suitable accessor is a node of kind "identifier" which is also not a function parameter.
+                // A suitable accessor is a node of kind "identifier" which is also not a
+                // function parameter.
                 //
                 // In the following example, the arguments inside of the parentheses are
                 // identifiers, but not accesses, as they serve the sole purpose of defining
