@@ -91,10 +91,8 @@ impl<'a> AccessGraph<'a> {
 
                 // Find the scope this node belongs to.
                 //
-                // Navigate the parent stack backwards until a node is found that
-                // is either the top-level "program" node or it is a "statement_block"
-                // that belongs to a function and is in the field named "body" of
-                // said function.
+                // The scope is either the top-level "program" node or the "body" field of a
+                // function, which is of kind "statement_block".
                 let mut scope_cursor = cursor_cache.cursor(node).unwrap();
                 let scope = loop {
                     let node = scope_cursor.goto_parent().unwrap();
@@ -128,17 +126,7 @@ impl<'a> AccessGraph<'a> {
                 Some(Access { node, scope, decl_node, decl_scope, accessor })
             })
             .fold(HashMap::new(), |mut accesses, access| {
-                // Store accesses grouped by the declaration node that is accessed.
-                //
-                // ```js
-                // function foo() {} // <-- this is the declaration.
-                //
-                // function bar() {
-                //   foo(); // <-- this node will result in an access to the above
-                //          //     declaration, and will be stored in the vector at
-                //          //     the entry keyed at the above `foo`'s node.
-                // }
-                // ```
+                // Store accesses grouped by the node of the declaration that is accessed.
                 let entry: &mut Vec<Access> = accesses.entry(access.decl_node).or_default();
                 entry.push(access);
                 accesses
@@ -182,25 +170,13 @@ impl<'a> AccessGraph<'a> {
 
         for (depth, parent) in cursor.parents().enumerate() {
             match parent.kind() {
-                // Class and function declarations have a name attached to them.
-                // Define that name as accessor.
-                //
                 // Check depth to avoid declarations using themselves as accessor.
                 "class_declaration" | "function_declaration" if depth > 0 => {
                     return parent.child_by_field_name("name");
                 },
-                // Classes, functions and arrow functions without a declaration
-                // don't have a name and can only be accessed from their own
-                // accessor. Recursively find the accessor of their parent node.
                 "class" | "function" | "arrow_function" => {
                     return Self::find_accessor(cursor_cache, parent);
                 },
-                // LHS/RHS expressions.
-                //
-                // If the node we are seeking an accessor for is on the right hand side of an
-                // expression of the form `lhs = rhs`, then this node will be accessed every
-                // time the identifier(s) on `lhs` is accessed. That node will thus be the
-                // accessor.
                 kind @ ("variable_declarator"
                 | "assignment_expression"
                 | "augmented_assignment_expression") => {
@@ -216,16 +192,9 @@ impl<'a> AccessGraph<'a> {
                     } else {
                         // Use LHS identifier if node is in RHS of the assignment.
                         //
-                        // The LHS may be more complex than a single identifier; for example,
-                        // it could be of the form:
-                        // ```js
-                        // foo.bar.baz = call_me()
-                        // ```
-                        // In this case, we want the accessor to be `foo`, i.e. the
-                        // outermost identifier.
-                        // The following function call retrieves the smallest node that
-                        // covers the supplied range. This accounts for both the outermost
-                        // identifier case and the single identifier case.
+                        // Pick the outermost `identifier` node by retrieving the smallest node at
+                        // the start of the line. This accounts for more complex kinds of nodes
+                        // beyond `identifier` (e.g. `member_expression`).
                         return parent.named_descendant_for_point_range(
                             lhs.start_position(),
                             lhs.start_position(),
@@ -239,8 +208,15 @@ impl<'a> AccessGraph<'a> {
         None
     }
 
-    // Compute paths between a source node and one or more target nodes.
-    // The supplied predicate determines what is considered a target node.
+    /// Compute paths between a source node and one or more target nodes.
+    ///
+    /// The supplied predicate determines what is considered a target node.
+    ///
+    /// The path finding algorithm is a breadth-first search based on a queue.
+    /// The first node that is visited is the supplied source node.
+    /// Each element of the queue contains the node to be visited, and a node path
+    /// to start from. On each iteration, the node path is augmented with new edges,
+    /// cloned and forwarded to future iterations.
     pub fn compute_paths<F>(
         &self,
         is_target: F,
@@ -251,19 +227,11 @@ impl<'a> AccessGraph<'a> {
     {
         type NodePath<'a> = Vec<AccessEdge<'a>>;
 
-        // The path finding algorithm is a breadth-first search based on a queue.
-        // The first node that is visited is the supplied source node.
-        // Each element of the queue contains the node to be visited, and a node path
-        // to start from. On each iteration, the node path is augmented with new edges,
-        // cloned and forwarded to future iterations.
         let mut bfs_q: VecDeque<(Node<'a>, NodePath)> = VecDeque::new();
         bfs_q.push_back((source, Vec::new()));
 
-        // Keep a list of all paths found over the course of the algorithm execution.
         let mut found_paths = Vec::new();
-        // Keep a set of visited nodes to avoid cycles and to process each node only
-        // once.
-        let mut visited = HashSet::new();
+        let mut visited_nodes = HashSet::new();
 
         // Collect accesses in a dictionary where the key is the accessed
         // identifier.
@@ -279,15 +247,13 @@ impl<'a> AccessGraph<'a> {
 
         while let Some((node, path)) = bfs_q.pop_front() {
             // Skip if we already visited this node.
-            if visited.contains(&node) {
+            if visited_nodes.contains(&node) {
                 continue;
             }
 
-            visited.insert(node);
+            visited_nodes.insert(node);
 
-            // Retrieve the access scope of the processed node. This node is an identifier
-            // and an access should be computed for all of them. If that is not the case,
-            // this is a bug; report the error.
+            // Retrieve the access scope of the current node, which must exist for all identifiers.
             let access = access_scopes.get(&node).copied().ok_or_else(|| {
                 Error::Generic(format!(
                     "All identifiers should have an access scope: {:?} {}",
@@ -306,17 +272,15 @@ impl<'a> AccessGraph<'a> {
                 ))
             })?;
 
-            // We started from a node, found out what declaration it is linked to, then
-            // found all the accesses to that declaration. We want to create N edges
-            // between the node and each of the N accessors of the declaration.
+            // Create edges from the current node to all of its declaration node's accessors.
             for declaration_access in declaration_accesses {
                 // Clone the path that leads to the current node.
                 let mut path = path.clone();
-                // Add an edge from the current node to this access to the declaration node.
+                // Add an edge from the current node to the declaration node's access.
                 path.push(AccessEdge::new(node, *declaration_access));
 
-                // If the access is a target according to the supplied predicate, we have found
-                // a path between the source and the target; add it to the list of found paths.
+                // If the access is a target according to the supplied predicate, add the path to
+                // the list of found paths.
                 if is_target(declaration_access) {
                     found_paths.push(path.to_vec());
                 }
