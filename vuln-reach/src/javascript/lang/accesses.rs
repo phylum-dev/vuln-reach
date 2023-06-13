@@ -346,11 +346,10 @@ impl<'a> AccessGraph<'a> {
                 // }
                 // ```
                 if let Some(accessor) = declaration_access.accessor.filter(|node| {
-                    // TODO some accessor nodes are actually scopes, and of kind
-                    // "statement_block". We currently are not processing those,
-                    // and we should either find a strategy for that or improve
-                    // [`Self::find_accessor`] so that it only emits accessors of
-                    // kind "identifier". See the "Generic statement scopes" stanza.
+                    // TODO The only spot where the current implementation
+                    // of [`Self::find_accessor`] can potentially emit non-`identifier` nodes is
+                    // in the LHS/RHS case, if the leftmost node ends up not being an `identifier`.
+                    // We should check the grammar to understand whether that can ever happen.
                     if node.kind() != "identifier" {
                         return false;
                     }
