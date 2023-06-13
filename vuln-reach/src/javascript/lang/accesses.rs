@@ -332,7 +332,7 @@ impl<'a> AccessGraph<'a> {
                 // of a list of formal parameters.
                 //
                 // In the following example, the arguments inside of the parentheses are
-                // identifier, but not accesses, as they serve the sole purpose of defining
+                // identifiers, but not accesses, as they serve the sole purpose of defining
                 // names inside of the function scope. On the other hand, the call to `bar` with
                 // argument `arg1` results in an access to `bar` defined in the
                 // global scope and an access to `arg1` defined in
