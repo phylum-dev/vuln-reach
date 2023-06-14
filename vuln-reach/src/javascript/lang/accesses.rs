@@ -275,7 +275,6 @@ impl<'a> AccessGraph<'a> {
             // Create edges from the current node to all of its declaration node's
             // accessors.
             for declaration_access in declaration_accesses {
-                // Clone the path that leads to the current node.
                 let mut path = path.clone();
                 // Add an edge from the current node to the declaration node's access.
                 path.push(AccessEdge::new(node, *declaration_access));
@@ -289,22 +288,8 @@ impl<'a> AccessGraph<'a> {
                 // Push suitable accessors of the current node to the bottom of the queue.
                 //
                 // A suitable accessor is a node of kind "identifier" which is also not a
-                // function parameter.
-                //
-                // In the following example, the arguments inside of the parentheses are
-                // identifiers, but not accesses, as they serve the sole purpose of defining
-                // names inside of the function scope. On the other hand, the call to `bar` with
-                // argument `arg1` results in an access to `bar` defined in the
-                // global scope and an access to `arg1` defined in
-                // the inner scope of the function.
-                //
-                // ```js
-                // function bar(arg) {}
-                // function foo(arg1, arg2, arg3) {
-                //   var baz;
-                //   bar(arg1);
-                // }
-                // ```
+                // function parameter or a catch statement parameters, as those identifiers
+                // act like a declaration in their scope.
                 if let Some(accessor) = declaration_access.accessor.filter(|node| {
                     if node.kind() != "identifier" {
                         return false;
