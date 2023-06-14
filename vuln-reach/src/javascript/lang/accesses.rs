@@ -250,7 +250,6 @@ impl<'a> AccessGraph<'a> {
             if visited_nodes.contains(&node) {
                 continue;
             }
-
             visited_nodes.insert(node);
 
             // Retrieve the access scope of the current node, which must exist for all
