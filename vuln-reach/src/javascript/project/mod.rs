@@ -12,6 +12,7 @@ use super::package::Package;
 use crate::javascript::module::resolver::ModuleResolver;
 use crate::javascript::package::reachability::NodePath;
 use crate::javascript::package::resolver::PackageResolver;
+use crate::{Error, Result};
 
 /// Specifies the package and module that direct towards a vulnerability.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -163,7 +164,7 @@ impl<R: ModuleResolver> Project<R> {
         Self { package_resolver, packages }
     }
 
-    pub fn reachability(&self, vuln_node: &VulnerableNode) -> ProjectReachability {
+    pub fn reachability(&self, vuln_node: &VulnerableNode) -> Result<ProjectReachability> {
         self.reachability_inner(vuln_node, Default::default())
     }
 
@@ -171,7 +172,7 @@ impl<R: ModuleResolver> Project<R> {
         &self,
         project_reachability: ProjectReachability,
         vuln_node: &VulnerableNode,
-    ) -> ProjectReachability {
+    ) -> Result<ProjectReachability> {
         self.reachability_inner(vuln_node, project_reachability)
     }
 
@@ -190,7 +191,7 @@ impl<R: ModuleResolver> Project<R> {
         &'a self,
         vuln_node: &'a VulnerableNode,
         package_reachabilities: ProjectReachability,
-    ) -> ProjectReachability {
+    ) -> Result<ProjectReachability> {
         let ProjectReachability(mut package_reachabilities) = package_reachabilities;
 
         // Using foreign imports for each package, build a list of edges (a, b)
@@ -229,7 +230,7 @@ impl<R: ModuleResolver> Project<R> {
 
         // Find the topological sorting of this graph so that we can find the
         // reachability for the leaves first and for all the dependents afterwards.
-        let topo_ordering = topological_sort(&edges);
+        let topo_ordering = topological_sort(&edges)?;
 
         // For each dependent A on dependency B, compute reachability between A's
         // imports and B's exports.
@@ -375,7 +376,7 @@ impl<R: ModuleResolver> Project<R> {
         // Pick out reachability for the topmost package. By construction, it should
         // always be the last one in the topological ordering. We should build tests
         // to ensure this is the case.
-        ProjectReachability::new(package_reachabilities)
+        Ok(ProjectReachability::new(package_reachabilities))
     }
 }
 
@@ -403,7 +404,7 @@ fn package_spec_split(s: &str) -> (&str, Option<&str>) {
 }
 
 // Implementation of https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm
-fn topological_sort<N: Copy + PartialEq + Eq + Hash>(edges: &[(N, N)]) -> Vec<N> {
+fn topological_sort<N: Copy + PartialEq + Eq + Hash>(edges: &[(N, N)]) -> Result<Vec<N>> {
     let mut nodes = {
         // Build a set of all vertices.
         let all_nodes = edges
@@ -443,9 +444,11 @@ fn topological_sort<N: Copy + PartialEq + Eq + Hash>(edges: &[(N, N)]) -> Vec<N>
 
     // Input graph should be a DAG hence not have any cycles; it means that
     // all the edges have been processed.
-    assert!(adj_lists.iter().all(|(_, s)| s.is_empty()));
+    if adj_lists.iter().any(|(_, s)| !s.is_empty()) {
+        return Err(Error::Generic("Could not find topological ordering: cycles detected".into()));
+    }
 
-    ordering
+    Ok(ordering)
 }
 
 #[cfg(test)]
@@ -534,7 +537,7 @@ mod tests {
         let edges =
             &[(5, 11), (7, 11), (7, 8), (3, 8), (3, 10), (11, 2), (11, 9), (11, 10), (8, 9)];
 
-        let t = topological_sort(edges);
+        let t = topological_sort(edges).unwrap();
 
         let is_before =
             |a, b| t.iter().position(|i| i == a).unwrap() < t.iter().position(|i| i == b).unwrap();
@@ -557,10 +560,12 @@ mod tests {
     fn test_trivial_reachability_esm() {
         let project = project_trivial_esm();
 
-        let r = project.reachability_inner(
-            &VulnerableNode::new("dependency", "vuln.js", 1, 31, 1, 34),
-            Default::default(),
-        );
+        let r = project
+            .reachability_inner(
+                &VulnerableNode::new("dependency", "vuln.js", 1, 31, 1, 34),
+                Default::default(),
+            )
+            .unwrap();
         let path = r.find_path("dependent").unwrap();
         println!("{:#?}", r);
         print_path(path);
@@ -570,10 +575,12 @@ mod tests {
     fn test_trivial_reachability_cjs() {
         let project = project_trivial_cjs();
 
-        let r = project.reachability_inner(
-            &VulnerableNode::new("dependency", "vuln.js", 1, 41, 1, 44),
-            Default::default(),
-        );
+        let r = project
+            .reachability_inner(
+                &VulnerableNode::new("dependency", "vuln.js", 1, 41, 1, 44),
+                Default::default(),
+            )
+            .unwrap();
         let path = r.find_path("dependent").unwrap();
         println!("{:#?}", r);
         print_path(path);
