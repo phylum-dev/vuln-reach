@@ -49,8 +49,9 @@ async fn main() {
     }
 
     let mean: f64 = perf_changes.iter().copied().sum::<f64>() / perf_changes.len() as f64;
-    let std: f64 = perf_changes.iter().copied().map(|val| (val - mean).powf(2f64)).sum::<f64>()
-        / (perf_changes.len() - 1) as f64;
+    let std: f64 = (perf_changes.iter().copied().map(|val| (val - mean).powf(2f64)).sum::<f64>()
+        / (perf_changes.len() - 1) as f64)
+        .sqrt();
 
     println!(
         "\nMean: {:5.2}% {}\n Std: {:5.2}",
