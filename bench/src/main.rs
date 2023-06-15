@@ -33,7 +33,9 @@ async fn main() {
         // Ensure equivalence.
         assert_eq(upstream_package, package);
 
-        // Compute and store percentage change. Negative numbers mean faster HEAD.
+        // Compute and store percentage change.
+        // If the package was loaded faster with HEAD than with upstream, the
+        // change will be a negative value.
         let elapsed = elapsed.as_secs_f64();
         let upstream_elapsed = upstream_elapsed.as_secs_f64();
         let pct_change = elapsed / upstream_elapsed - 1f64;
