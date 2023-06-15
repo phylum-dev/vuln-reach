@@ -114,7 +114,7 @@ impl ProjectDef {
 
         // Compute reachability for each node.
         for node in &self.vuln {
-            let reachability = project.reachability(node);
+            let reachability = project.reachability(node)?;
 
             let path = reachability.find_path(&self.name);
 
