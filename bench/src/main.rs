@@ -26,9 +26,11 @@ async fn main() {
 
         // Time loading HEAD.
         let (package, elapsed) = package(&tarball);
+        println!("  HEAD loaded in {:?}", elapsed);
 
         // Time loading upstream.
         let (upstream_package, upstream_elapsed) = upstream_package(&tarball);
+        println!("  Upstream loaded in {:?}", upstream_elapsed);
 
         // Ensure equivalence.
         assert_eq(upstream_package, package);
@@ -68,7 +70,6 @@ fn package(tarball: &Bytes) -> (Package<TarballModuleResolver>, Duration) {
     let start = std::time::Instant::now();
     let package = Package::from_tarball_bytes(tarball.to_vec()).unwrap();
     let elapsed = start.elapsed();
-    println!("  HEAD loaded in {:?}", elapsed);
 
     (package, elapsed)
 }
@@ -78,7 +79,6 @@ fn upstream_package(tarball: &Bytes) -> (UpstreamPackage<UpstreamTarballModuleRe
     let start = std::time::Instant::now();
     let package = UpstreamPackage::from_tarball_bytes(tarball.to_vec()).unwrap();
     let elapsed = start.elapsed();
-    println!("  Upstream loaded in {:?}", elapsed);
 
     (package, elapsed)
 }
