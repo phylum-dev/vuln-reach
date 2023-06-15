@@ -368,9 +368,7 @@ impl<'a> SymbolTable<'a> {
             let body = grandparent.child_by_field_name("body").unwrap();
 
             if body.kind() == "statement_block" {
-                // Get scope and ensure the identifier is defined in it.
                 let scope = self.get_scope(body).unwrap();
-                assert!(scope.names.iter().any(|&node| self.tree.repr_of(node) == name));
 
                 return Some((scope, node));
             } else {
@@ -385,10 +383,7 @@ impl<'a> SymbolTable<'a> {
         if parent.kind() == "catch_clause" {
             // Get catch body.
             let body = parent.child_by_field_name("body").unwrap();
-
-            // Get scope and ensure the identifier is defined in it.
             let scope = self.get_scope(body).unwrap();
-            assert!(scope.names.iter().any(|&node| self.tree.repr_of(node) == name));
 
             return Some((scope, node));
         }
