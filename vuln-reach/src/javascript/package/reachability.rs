@@ -517,6 +517,7 @@ mod tests {
     use super::*;
     use crate::javascript::module::{MemModuleResolver, ModuleCache};
     use crate::javascript::package::Package;
+    use crate::test_util::npm_package;
 
     fn fixture_esm_package1() -> Package<MemModuleResolver> {
         Package::from_mem(hashmap! {
@@ -788,6 +789,53 @@ mod tests {
             &VulnerableNode::new("fixture", "source3.js".to_string(), 1, 9, 1, 16),
         )
         .unwrap();
+        println!("{r:#?}");
+        println!("{r}");
+    }
+
+    // This test case's main purpose is checking whether imports without extension
+    // (i.e. './lib/Pool', like generic_pool does) are still correctly resolved.
+    #[tokio::test]
+    async fn test_reachability_generic_pool() {
+        let package = npm_package("generic-pool", "3.8.2").await;
+        let r = PackageReachability::new(
+            &package,
+            &VulnerableNode::new("generic-pool", "lib/Pool.js".to_string(), 23, 6, 23, 9),
+        )
+        .unwrap();
+
+        println!("{r:#?}");
+        println!("{r}");
+
+        let node_paths_in_index = r.0.get("index.js").unwrap().get("lib/Pool.js").unwrap();
+
+        assert!(node_paths_in_index.iter().map(|node_path| node_path.0.first().unwrap()).any(
+            |node_step| node_step.symbol == "createPool"
+                && node_step.start_row == 9
+                && node_step.start_column == 40
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_reachability_handlebars_esm() {
+        let package = npm_package("handlebars", "4.7.6").await;
+
+        let target_node =
+            VulnerableNode::new("handlebars", "dist/cjs/handlebars/runtime.js", 51, 9, 51, 16);
+        let r = PackageReachability::new(&package, &target_node).unwrap();
+
+        println!("{r:#?}");
+        println!("{r}");
+    }
+
+    #[tokio::test]
+    async fn test_reachability_handlebars_cjs() {
+        let package = npm_package("handlebars", "4.7.6").await;
+
+        let target_node =
+            VulnerableNode::new("handlebars", "lib/handlebars/runtime.js", 48, 16, 48, 23);
+        let r = PackageReachability::new(&package, &target_node).unwrap();
+
         println!("{r:#?}");
         println!("{r}");
     }

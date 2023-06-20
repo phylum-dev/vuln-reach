@@ -457,9 +457,9 @@ mod tests {
     use textwrap::dedent;
 
     use super::*;
-    use crate::javascript::module::MemModuleResolver;
+    use crate::javascript::module::{MemModuleResolver, TarballModuleResolver};
     use crate::javascript::package::Package;
-    use crate::test_util::get_tarball_bytes;
+    use crate::test_util::npm_package;
 
     macro_rules! mem_fixture {
         ($($module:expr => $src:expr,)*) => {
@@ -533,6 +533,25 @@ mod tests {
         Project { package_resolver, packages: vec!["dependency".into(), "dependent".into()] }
     }
 
+    async fn project_redis_client() -> Project<TarballModuleResolver> {
+        let package_resolver = PackageResolver::builder()
+            .with_package("@redis/client", npm_package("@redis/client", "1.0.6").await)
+            .with_package("cluster-key-slot", npm_package("cluster-key-slot", "1.1.2").await)
+            .with_package("generic-pool", npm_package("generic-pool", "3.8.2").await)
+            .with_package("yallist", npm_package("yallist", "4.0.0").await)
+            .build();
+
+        Project {
+            package_resolver,
+            packages: vec![
+                "@redis/client".into(),
+                "cluster-key-slot".into(),
+                "generic-pool".into(),
+                "yallist".into(),
+            ],
+        }
+    }
+
     #[test]
     fn test_topo_sort() {
         let edges =
@@ -551,11 +570,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_topo_sort_babel() {
-        let babel_register =
-            Package::from_tarball_bytes(get_tarball_bytes("babel-register", "6.26.0").await)
-                .unwrap();
-        let babel_core =
-            Package::from_tarball_bytes(get_tarball_bytes("babel-core", "6.26.3").await).unwrap();
+        let babel_register = npm_package("babel-register", "6.26.0").await;
+        let babel_core = npm_package("babel-core", "6.26.3").await;
 
         let project = Project::new(
             PackageResolver::builder()
@@ -609,6 +625,17 @@ mod tests {
             .unwrap();
         let path = r.find_path("dependent").unwrap();
         println!("{:#?}", r);
+        print_path(path);
+    }
+
+    #[tokio::test]
+    async fn test_reachability_redis_client() {
+        let project = project_redis_client().await;
+
+        let target_node = VulnerableNode::new("generic-pool", "lib/Pool.js", 743, 17, 743, 21);
+        let r = project.reachability(&target_node).unwrap();
+        println!("{:#?}", r);
+        let path = r.find_path("@redis/client").unwrap();
         print_path(path);
     }
 
