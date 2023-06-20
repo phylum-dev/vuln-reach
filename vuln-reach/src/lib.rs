@@ -7,6 +7,8 @@ use thiserror::Error;
 use tree_sitter::{Language, LanguageError, Node, Parser, Query, QueryError, Tree as TsTree};
 
 pub mod javascript;
+#[cfg(test)]
+mod test_util;
 pub mod util;
 
 pub use tree_sitter;
