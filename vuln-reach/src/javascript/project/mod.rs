@@ -459,6 +459,7 @@ mod tests {
     use super::*;
     use crate::javascript::module::MemModuleResolver;
     use crate::javascript::package::Package;
+    use crate::test_util::get_tarball_bytes;
 
     macro_rules! mem_fixture {
         ($($module:expr => $src:expr,)*) => {
@@ -546,6 +547,31 @@ mod tests {
         for (a, b) in edges {
             assert!(is_before(a, b), "{a} -> {b}");
         }
+    }
+
+    #[tokio::test]
+    async fn test_topo_sort_babel() {
+        let babel_register =
+            Package::from_tarball_bytes(get_tarball_bytes("babel-register", "6.26.0").await)
+                .unwrap();
+        let babel_core =
+            Package::from_tarball_bytes(get_tarball_bytes("babel-core", "6.26.3").await).unwrap();
+
+        let project = Project::new(
+            PackageResolver::builder()
+                .with_package("babel-register", babel_register)
+                .with_package("babel-core", babel_core)
+                .build(),
+            vec!["babel-core".to_string(), "babel-register".to_string()],
+        );
+
+        let vuln_node = VulnerableNode::new("babel-core", "lib/util.js", 72, 11, 72, 14);
+
+        // Reachability should error out because there is no topological ordering
+        // between the two packages with the current implementation, as they depend
+        // on each other. This doesn't mean that there is a runtime dependency cycle,
+        // but the respective `package.json` do point to each other.
+        assert!(project.reachability(&vuln_node).is_err());
     }
 
     #[test]
