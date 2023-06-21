@@ -10,15 +10,19 @@ use crate::{Error, Tree, JS};
 //
 // All the compatible export statements in CommonJS are the following:
 // 1. module.exports = an object, an identifier, or a function
+//
 //    When this is found, override all previous exports.
+//
 // 2. module.exports.foo = anything
+//
 //    When this is found, override exports of the same name only.
+//
 // 3. exports.foo = anything
-//    This is compatible with 2., but if there is even one instance
-//    of 1., this definition does nothing. This is because the
-//    module-global `exports` is a shorthand for `module.exports`,
-//    but if something is assigned to `module.exports`, this simply
-//    gets cloaked and the reference gets lost.
+//
+//    This is compatible with 2., but if there is even one instance of 1., this
+//    definition does nothing. This is because the module-global `exports` is a
+//    shorthand for `module.exports`, but if something is assigned to
+//    `module.exports`, this simply gets cloaked and the reference gets lost.
 //
 // For the time, we only care about top-level exported objects,
 // i.e.:
