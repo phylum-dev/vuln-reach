@@ -156,12 +156,11 @@ impl ProjectReachability {
 
 pub struct Project<R: ModuleResolver> {
     package_resolver: PackageResolver<R>,
-    packages: Vec<String>,
 }
 
 impl<R: ModuleResolver> Project<R> {
-    pub fn new(package_resolver: PackageResolver<R>, packages: Vec<String>) -> Self {
-        Self { package_resolver, packages }
+    pub fn new(package_resolver: PackageResolver<R>) -> Self {
+        Self { package_resolver }
     }
 
     pub fn reachability(&self, vuln_node: &VulnerableNode) -> Result<ProjectReachability> {
@@ -177,8 +176,8 @@ impl<R: ModuleResolver> Project<R> {
     }
 
     pub fn all_packages(&self) -> Vec<(&str, &Package<R>)> {
-        self.packages
-            .iter()
+        self.package_resolver
+            .package_specs()
             .filter_map(|package_spec| {
                 self.package_resolver
                     .resolve_package(package_spec)
@@ -497,7 +496,7 @@ mod tests {
             )
             .build();
 
-        Project { package_resolver, packages: vec!["dependency".into(), "dependent".into()] }
+        Project { package_resolver }
     }
 
     fn project_trivial_cjs() -> Project<MemModuleResolver> {
@@ -529,7 +528,7 @@ mod tests {
             )
             .build();
 
-        Project { package_resolver, packages: vec!["dependency".into(), "dependent".into()] }
+        Project { package_resolver }
     }
 
     #[test]

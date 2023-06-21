@@ -106,11 +106,9 @@ impl ProjectDef {
         }
 
         let package_resolver = package_resolver.build();
-        let packages =
-            self.packages.iter().map(|PackageDef { name, .. }| name.clone()).collect::<Vec<_>>();
 
         // Build the project object.
-        let project = Project::new(package_resolver, packages);
+        let project = Project::new(package_resolver);
 
         // Compute reachability for each node.
         for node in &self.vuln {

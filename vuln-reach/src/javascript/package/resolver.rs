@@ -61,6 +61,10 @@ where
 
         Some((package, module))
     }
+
+    pub fn package_specs(&self) -> impl Iterator<Item = &String> {
+        self.packages.keys()
+    }
 }
 
 /// Builder for [`PackageResolver`].
