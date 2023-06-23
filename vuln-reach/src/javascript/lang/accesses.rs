@@ -165,17 +165,23 @@ impl<'a> AccessGraph<'a> {
     /// NOTE: `test` in this example is not declared as variable and thus
     /// hoisted to the global scope. This is why the accessor of `bar` cannot be
     /// `foo`, otherwise the access from `baz` to `bar` would not be detected.
-    fn find_accessor(cursor_cache: &mut TreeCursorCache<'a>, node: Node<'a>) -> Option<Node<'a>> {
+    fn find_accessor(
+        cursor_cache: &mut TreeCursorCache<'a>,
+        mut node: Node<'a>,
+    ) -> Option<Node<'a>> {
         let cursor = cursor_cache.cursor(node).unwrap();
+        let mut cur_depth = 0;
 
         for (depth, parent) in cursor.parents().enumerate() {
             match parent.kind() {
                 // Check depth to avoid declarations using themselves as accessor.
-                "class_declaration" | "function_declaration" if depth > 0 => {
+                "class_declaration" | "function_declaration" if depth > cur_depth => {
                     return parent.child_by_field_name("name");
                 },
+                // Find the next parent identifier if node is an anonymous declaration.
                 "class" | "function" | "arrow_function" => {
-                    return Self::find_accessor(cursor_cache, parent);
+                    cur_depth = depth;
+                    node = parent;
                 },
                 kind @ ("variable_declarator"
                 | "assignment_expression"
@@ -188,17 +194,28 @@ impl<'a> AccessGraph<'a> {
 
                     if lhs.byte_range().contains(&node.start_byte()) {
                         // Find next parent identifier if node is in LHS of the assignment.
-                        return Self::find_accessor(cursor_cache, parent);
+                        cur_depth = depth;
+                        node = parent;
                     } else {
                         // Use LHS identifier if node is in RHS of the assignment.
                         //
                         // Pick the outermost `identifier` node by retrieving the smallest node at
                         // the start of the line. This accounts for more complex kinds of nodes
                         // beyond `identifier` (e.g. `member_expression`).
-                        return parent.named_descendant_for_point_range(
-                            lhs.start_position(),
-                            lhs.start_position(),
-                        );
+                        if let Some(accessor) = parent
+                            .named_descendant_for_point_range(
+                                lhs.start_position(),
+                                lhs.start_position(),
+                            )
+                            .filter(|node| node.kind() == "identifier")
+                        {
+                            return Some(accessor);
+                        }
+
+                        // If the node found is not an identifier, the LHS
+                        // has a destructuring assignment. In that case, keep
+                        // searching for the next accessor in the parent
+                        // hierarchy.
                     }
                 },
                 _ => (),
@@ -291,10 +308,6 @@ impl<'a> AccessGraph<'a> {
                 // function parameter or a catch statement parameters, as those identifiers
                 // act like a declaration in their scope.
                 if let Some(accessor) = declaration_access.accessor.filter(|node| {
-                    if node.kind() != "identifier" {
-                        return false;
-                    }
-
                     let mut cursor = Cursor::new(self.tree, *node).unwrap();
                     cursor.goto_parent().map_or(false, |node| node.kind() != "formal_parameters")
                 }) {
@@ -949,6 +962,73 @@ mod tests {
                 try {
                     foo();
                 } catch(foo) { }
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn array_destructuring_assignment() {
+        let code = r#"
+            function foo() {}
+
+            function bar() {
+                var [ foo ] = [ foo ];
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+
+        let code = r#"
+            function foo() {}
+
+            function bar() {
+                let [ foo ] = [ foo ];
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn object_destructuring_assignment() {
+        let code = r#"
+            function foo() {}
+
+            function bar() {
+                var { foo } = { foo: foo };
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+
+        let code = r#"
+            function foo() {}
+
+            function bar() {
+                let { foo } = { foo: foo };
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    // This test fails because the node in the RHS of the assignment is of kind
+    // "shorthand_property_identifier". Note that the LHS also does not have an
+    // identifier, but it has a "shorthand_property_identifier_pattern".
+    #[test]
+    #[ignore]
+    fn object_destructuring_assignment_with_shorthand() {
+        let code = r#"
+            function foo() {}
+
+            function bar() {
+                var { foo } = { foo };
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+
+        let code = r#"
+            function foo() {}
+
+            function bar() {
+                let { foo } = { foo };
             }
         "#;
         assert!(is_reachable(code, "bar", "foo"));
