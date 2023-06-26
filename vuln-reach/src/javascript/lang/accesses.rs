@@ -405,6 +405,21 @@ mod tests {
         assert!(is_accessor(code, (3, 30, 32), Some((2, 21, 23))));
     }
 
+    #[test]
+    fn accessor_assignment_expressions() {
+        let code = r#"
+            function foo() {
+                let bar = baz
+                bar = baz
+                bar += baz
+            }
+        "#;
+
+        assert!(is_accessor(code, (2, 20, 22), Some((1, 21, 23))));
+        assert!(is_accessor(code, (3, 16, 18), Some((1, 21, 23))));
+        assert!(is_accessor(code, (4, 16, 18), Some((1, 21, 23))));
+    }
+
     // Check if the accessor of the node is the expected one.
     //
     // As identifiers can't span more than one row, they are specified as
