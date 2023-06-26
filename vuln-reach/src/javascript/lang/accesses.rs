@@ -168,14 +168,15 @@ impl<'a> AccessGraph<'a> {
     fn find_accessor(cursor_cache: &mut TreeCursorCache<'a>, node: Node<'a>) -> Option<Node<'a>> {
         let cursor = cursor_cache.cursor(node).unwrap();
 
-        for (depth, parent) in cursor.parents().enumerate() {
+        for parent in cursor.parents() {
             match parent.kind() {
-                // Check depth to avoid declarations using themselves as accessor.
-                "class_declaration" | "function_declaration" if depth > 0 => {
-                    return parent.child_by_field_name("name");
-                },
-                "class" | "function" | "arrow_function" => {
-                    return Self::find_accessor(cursor_cache, parent);
+                // Check node to avoid declarations using themselves as accessor.
+                "class_declaration" | "function_declaration" => {
+                    if let Some(accessor) =
+                        parent.child_by_field_name("name").filter(|&name| name != node)
+                    {
+                        return Some(accessor);
+                    }
                 },
                 kind @ ("variable_declarator"
                 | "assignment_expression"
@@ -186,19 +187,26 @@ impl<'a> AccessGraph<'a> {
                         parent.child_by_field_name(b"left").unwrap()
                     };
 
-                    if lhs.byte_range().contains(&node.start_byte()) {
-                        // Find next parent identifier if node is in LHS of the assignment.
-                        return Self::find_accessor(cursor_cache, parent);
-                    } else {
+                    if !lhs.byte_range().contains(&node.start_byte()) {
                         // Use LHS identifier if node is in RHS of the assignment.
                         //
                         // Pick the outermost `identifier` node by retrieving the smallest node at
                         // the start of the line. This accounts for more complex kinds of nodes
                         // beyond `identifier` (e.g. `member_expression`).
-                        return parent.named_descendant_for_point_range(
-                            lhs.start_position(),
-                            lhs.start_position(),
-                        );
+                        if let Some(accessor) = parent
+                            .named_descendant_for_point_range(
+                                lhs.start_position(),
+                                lhs.start_position(),
+                            )
+                            .filter(|node| node.kind() == "identifier")
+                        {
+                            return Some(accessor);
+                        }
+
+                        // If the node found is not an identifier, the LHS
+                        // has a destructuring assignment. In that case, keep
+                        // searching for the next accessor in the parent
+                        // hierarchy.
                     }
                 },
                 _ => (),
@@ -291,10 +299,6 @@ impl<'a> AccessGraph<'a> {
                 // function parameter or a catch statement parameters, as those identifiers
                 // act like a declaration in their scope.
                 if let Some(accessor) = declaration_access.accessor.filter(|node| {
-                    if node.kind() != "identifier" {
-                        return false;
-                    }
-
                     let mut cursor = Cursor::new(self.tree, *node).unwrap();
                     cursor.goto_parent().map_or(false, |node| node.kind() != "formal_parameters")
                 }) {
@@ -365,6 +369,87 @@ mod tests {
         let paths = accesses.compute_paths(|access| access.node == param, ident).unwrap();
         println!("{paths:#?}");
         assert!(!paths.is_empty());
+    }
+
+    #[test]
+    fn accessor_function_declarations() {
+        let code = r#"
+            function foo() {
+                function bar() {
+                }
+
+                let quux = bar;
+            }
+        "#;
+
+        // The `foo` declaration has no accessor.
+        assert!(is_accessor(code, (1, 21, 23), None));
+        // The `bar` declaration has `foo` as accessor.
+        assert!(is_accessor(code, (2, 25, 27), Some((1, 21, 23))));
+        // The `bar` node in `quux = bar` has `quux` as accessor.
+        assert!(is_accessor(code, (5, 27, 29), Some((5, 20, 24))));
+        // The `quux` node has the `foo` declaration as accessor.
+        assert!(is_accessor(code, (5, 20, 24), Some((1, 21, 23))));
+    }
+
+    #[test]
+    fn accessor_anonymous_function() {
+        let code = r#"
+            let bar = function() { foo() }
+            function baz() {
+                (function() { foo() }())
+            }
+        "#;
+
+        // The `foo` call's accessor is the `bar` lexical declaration.
+        assert!(is_accessor(code, (1, 35, 37), Some((1, 16, 18))));
+        // In the IIFE, the `foo` call's accessor is the `baz` function declaration.
+        assert!(is_accessor(code, (3, 30, 32), Some((2, 21, 23))));
+    }
+
+    #[test]
+    fn accessor_assignment_expressions() {
+        let code = r#"
+            function foo() {
+                let bar = baz
+                bar = baz
+                bar += baz
+            }
+        "#;
+
+        assert!(is_accessor(code, (2, 20, 22), Some((1, 21, 23))));
+        assert!(is_accessor(code, (3, 16, 18), Some((1, 21, 23))));
+        assert!(is_accessor(code, (4, 16, 18), Some((1, 21, 23))));
+    }
+
+    // Check if the accessor of the node is the expected one.
+    //
+    // As identifiers can't span more than one row, they are specified as
+    // `(row, start_column, end_column)` here for brevity.
+    fn is_accessor(
+        code: &str,
+        accessed: (usize, usize, usize),
+        accessor: Option<(usize, usize, usize)>,
+    ) -> bool {
+        let tree = Tree::new(code.to_string()).unwrap();
+        let mut cursor_cache = TreeCursorCache::new(&tree);
+        let accessed = tree
+            .root_node()
+            .descendant_for_point_range(
+                Point::new(accessed.0, accessed.1),
+                Point::new(accessed.0, accessed.2),
+            )
+            .unwrap();
+        let accessor = accessor.and_then(|accessor| {
+            tree.root_node().descendant_for_point_range(
+                Point::new(accessor.0, accessor.1),
+                Point::new(accessor.0, accessor.2),
+            )
+        });
+
+        let found_accessor = AccessGraph::find_accessor(&mut cursor_cache, accessed);
+        println!("Found accessor: {found_accessor:?}");
+        accessor == found_accessor
     }
 
     #[test]
@@ -949,6 +1034,73 @@ mod tests {
                 try {
                     foo();
                 } catch(foo) { }
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn array_destructuring_assignment() {
+        let code = r#"
+            function foo() {}
+
+            function bar() {
+                var [ foo ] = [ foo ];
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+
+        let code = r#"
+            function foo() {}
+
+            function bar() {
+                let [ foo ] = [ foo ];
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    #[test]
+    fn object_destructuring_assignment() {
+        let code = r#"
+            function foo() {}
+
+            function bar() {
+                var { foo } = { foo: foo };
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+
+        let code = r#"
+            function foo() {}
+
+            function bar() {
+                let { foo } = { foo: foo };
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+    }
+
+    // This test fails because the node in the RHS of the assignment is of kind
+    // "shorthand_property_identifier". Note that the LHS also does not have an
+    // identifier, but it has a "shorthand_property_identifier_pattern".
+    #[test]
+    #[ignore]
+    fn object_destructuring_assignment_with_shorthand() {
+        let code = r#"
+            function foo() {}
+
+            function bar() {
+                var { foo } = { foo };
+            }
+        "#;
+        assert!(is_reachable(code, "bar", "foo"));
+
+        let code = r#"
+            function foo() {}
+
+            function bar() {
+                let { foo } = { foo };
             }
         "#;
         assert!(is_reachable(code, "bar", "foo"));
