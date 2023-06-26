@@ -384,8 +384,8 @@ mod tests {
 
         // The `foo` declaration has no accessor.
         assert!(is_accessor(code, (1, 21, 23), None));
-        // The `bar` declaration has no accessor.
-        assert!(is_accessor(code, (2, 25, 27), None));
+        // The `bar` declaration has `foo` as accessor.
+        assert!(is_accessor(code, (2, 25, 27), Some((1, 21, 23))));
         // The `bar` node in `quux = bar` has `quux` as accessor.
         assert!(is_accessor(code, (5, 27, 29), Some((5, 20, 24))));
         // The `quux` node has the `foo` declaration as accessor.
