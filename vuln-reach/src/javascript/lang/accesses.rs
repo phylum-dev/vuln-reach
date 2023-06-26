@@ -172,10 +172,12 @@ impl<'a> AccessGraph<'a> {
             match parent.kind() {
                 // Check node to avoid declarations using themselves as accessor.
                 "class_declaration" | "function_declaration" => {
-                    return parent.child_by_field_name("name").filter(|&name| name != node);
+                    if let Some(accessor) =
+                        parent.child_by_field_name("name").filter(|&name| name != node)
+                    {
+                        return Some(accessor);
+                    }
                 },
-                // Find the next parent identifier if node is an anonymous declaration.
-                "class" | "function" | "arrow_function" => (),
                 kind @ ("variable_declarator"
                 | "assignment_expression"
                 | "augmented_assignment_expression") => {
