@@ -96,7 +96,7 @@ impl<'a> SymbolTableBuilder<'a> {
 
     /// Retrieve the root scope.
     fn root_scope(&mut self) -> &mut Scope<'a> {
-        self.scope_stack.iter_mut().find(|scope| scope.level == 0).unwrap()
+        self.scope_stack.first_mut().unwrap()
     }
 
     // Starting from the end of the scope stack, find the first scope that's a
