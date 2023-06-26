@@ -165,24 +165,20 @@ impl<'a> AccessGraph<'a> {
     /// NOTE: `test` in this example is not declared as variable and thus
     /// hoisted to the global scope. This is why the accessor of `bar` cannot be
     /// `foo`, otherwise the access from `baz` to `bar` would not be detected.
-    fn find_accessor(
-        cursor_cache: &mut TreeCursorCache<'a>,
-        mut node: Node<'a>,
-    ) -> Option<Node<'a>> {
+    fn find_accessor(cursor_cache: &mut TreeCursorCache<'a>, node: Node<'a>) -> Option<Node<'a>> {
         let cursor = cursor_cache.cursor(node).unwrap();
-        let mut cur_depth = 0;
 
-        for (depth, parent) in cursor.parents().enumerate() {
+        for parent in cursor.parents() {
             match parent.kind() {
-                // Check depth to avoid declarations using themselves as accessor.
-                "class_declaration" | "function_declaration" if depth > cur_depth => {
-                    return parent.child_by_field_name("name");
+                // Check node to avoid declarations using themselves as accessor.
+                "class_declaration" | "function_declaration" => {
+                    let name = parent.child_by_field_name("name").unwrap();
+                    if name != node {
+                        return Some(name);
+                    }
                 },
                 // Find the next parent identifier if node is an anonymous declaration.
-                "class" | "function" | "arrow_function" => {
-                    cur_depth = depth;
-                    node = parent;
-                },
+                "class" | "function" | "arrow_function" => (),
                 kind @ ("variable_declarator"
                 | "assignment_expression"
                 | "augmented_assignment_expression") => {
@@ -192,11 +188,7 @@ impl<'a> AccessGraph<'a> {
                         parent.child_by_field_name(b"left").unwrap()
                     };
 
-                    if lhs.byte_range().contains(&node.start_byte()) {
-                        // Find next parent identifier if node is in LHS of the assignment.
-                        cur_depth = depth;
-                        node = parent;
-                    } else {
+                    if !lhs.byte_range().contains(&node.start_byte()) {
                         // Use LHS identifier if node is in RHS of the assignment.
                         //
                         // Pick the outermost `identifier` node by retrieving the smallest node at
