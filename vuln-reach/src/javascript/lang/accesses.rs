@@ -172,10 +172,7 @@ impl<'a> AccessGraph<'a> {
             match parent.kind() {
                 // Check node to avoid declarations using themselves as accessor.
                 "class_declaration" | "function_declaration" => {
-                    let name = parent.child_by_field_name("name").unwrap();
-                    if name != node {
-                        return Some(name);
-                    }
+                    return parent.child_by_field_name("name").filter(|&name| name != node);
                 },
                 // Find the next parent identifier if node is an anonymous declaration.
                 "class" | "function" | "arrow_function" => (),
@@ -370,6 +367,72 @@ mod tests {
         let paths = accesses.compute_paths(|access| access.node == param, ident).unwrap();
         println!("{paths:#?}");
         assert!(!paths.is_empty());
+    }
+
+    #[test]
+    fn accessor_function_declarations() {
+        let code = r#"
+            function foo() {
+                function bar() {
+                }
+
+                let quux = bar;
+            }
+        "#;
+
+        // The `foo` declaration has no accessor.
+        assert!(is_accessor(code, (1, 21, 23), None));
+        // The `bar` declaration has no accessor.
+        assert!(is_accessor(code, (2, 25, 27), None));
+        // The `bar` node in `quux = bar` has `quux` as accessor.
+        assert!(is_accessor(code, (5, 27, 29), Some((5, 20, 24))));
+        // The `quux` node has the `foo` declaration as accessor.
+        assert!(is_accessor(code, (5, 20, 24), Some((1, 21, 23))));
+    }
+
+    #[test]
+    fn accessor_anonymous_function() {
+        let code = r#"
+            let bar = function() { foo() }
+            function baz() {
+                (function() { foo() }())
+            }
+        "#;
+
+        // The `foo` call's accessor is the `bar` lexical declaration.
+        assert!(is_accessor(code, (1, 35, 37), Some((1, 16, 18))));
+        // In the IIFE, the `foo` call's accessor is the `baz` function declaration.
+        assert!(is_accessor(code, (3, 30, 32), Some((2, 21, 23))));
+    }
+
+    // Check if the accessor of the node is the expected one.
+    //
+    // As identifiers can't span more than one row, they are specified as
+    // `(row, start_column, end_column)` here for brevity.
+    fn is_accessor(
+        code: &str,
+        accessed: (usize, usize, usize),
+        accessor: Option<(usize, usize, usize)>,
+    ) -> bool {
+        let tree = Tree::new(code.to_string()).unwrap();
+        let mut cursor_cache = TreeCursorCache::new(&tree);
+        let accessed = tree
+            .root_node()
+            .descendant_for_point_range(
+                Point::new(accessed.0, accessed.1),
+                Point::new(accessed.0, accessed.2),
+            )
+            .unwrap();
+        let accessor = accessor.and_then(|accessor| {
+            tree.root_node().descendant_for_point_range(
+                Point::new(accessor.0, accessor.1),
+                Point::new(accessor.0, accessor.2),
+            )
+        });
+
+        let found_accessor = AccessGraph::find_accessor(&mut cursor_cache, accessed);
+        println!("Found accessor: {found_accessor:?}");
+        accessor == found_accessor
     }
 
     #[test]
