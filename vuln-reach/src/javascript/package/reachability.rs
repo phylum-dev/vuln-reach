@@ -700,7 +700,6 @@ mod tests {
         }
 
         {
-            println!("{:#?}", paths);
             let paths = paths.get(&("index.mjs", "source5.mjs")).unwrap();
             assert_eq!(
                 paths.iter().map(|p| p.name()).collect::<HashSet<_>>(),
@@ -776,19 +775,22 @@ mod tests {
         println!("{r:#?}");
         println!("{r}");
 
-        assert_eq!(r.reachable_exports(), hashset! {
-            ("source1.mjs", "reaches1"),
-            ("source1.mjs", "reaches2"),
-            ("source1.mjs", "reaches3"),
-            ("source3.mjs", "reaches"),
-            ("source4.mjs", "reaches"),
-            ("index.mjs", "explicit_export"),
-            ("index.mjs", "reaches"),
-            ("index.mjs", "reaches2"),
-            ("index.mjs", "source4"),
-            ("index.mjs", "source5"),
-            ("source5.mjs", "foo"),
-        });
+        assert_eq!(
+            r.reachable_exports(),
+            hashset! {
+                ("source1.mjs", "reaches1"),
+                ("source1.mjs", "reaches2"),
+                ("source1.mjs", "reaches3"),
+                ("source3.mjs", "reaches"),
+                ("source4.mjs", "reaches"),
+                ("index.mjs", "explicit_export"),
+                ("index.mjs", "reaches"),
+                ("index.mjs", "reaches2"),
+                ("index.mjs", "source4"),
+                ("index.mjs", "source5"),
+                ("source5.mjs", "foo"),
+            }
+        );
     }
 
     #[test]
