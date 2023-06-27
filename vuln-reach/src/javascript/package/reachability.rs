@@ -526,6 +526,7 @@ mod tests {
                 import * as source2 from './source2.mjs'
                 import { reaches } from './source3.mjs'
                 import source4 from './source4.mjs'
+                import source5 from './source5.mjs'
 
                 reaches()
                 reaches2()
@@ -541,7 +542,9 @@ mod tests {
                   reaches2()
                   reaches()
                   source4()
-                }"#),
+                  source5()
+                }
+                "#),
             "source1.mjs" => dedent(r#"
                 import { reaches, not_reaches } from './source3.mjs'
 
@@ -577,6 +580,13 @@ mod tests {
                 export default function() {
                     reaches()
                 }
+                "#),
+            "source5.mjs" => dedent(r#"
+                import { reaches } from './source3.mjs'
+                let foo = function() {
+                    reaches()
+                }
+                export default foo
                 "#)
         })
         .unwrap()
@@ -673,17 +683,28 @@ mod tests {
 
         print_paths(package.cache(), paths.clone());
 
-        if let Some(paths) = paths.get(&("source1.mjs", "source3.mjs")) {
+        {
+            let paths = paths.get(&("source1.mjs", "source3.mjs")).unwrap();
             assert_eq!(
                 paths.iter().map(|p| p.name()).collect::<HashSet<_>>(),
                 hashset! {"reaches1", "reaches2", "reaches3"}
             );
         }
 
-        if let Some(paths) = paths.get(&("index.mjs", "source3.mjs")) {
+        {
+            let paths = paths.get(&("index.mjs", "source3.mjs")).unwrap();
             assert_eq!(
                 paths.iter().map(|p| p.name()).collect::<HashSet<_>>(),
                 hashset! {"reaches", "default", "explicit_export"}
+            );
+        }
+
+        {
+            println!("{:#?}", paths);
+            let paths = paths.get(&("index.mjs", "source5.mjs")).unwrap();
+            assert_eq!(
+                paths.iter().map(|p| p.name()).collect::<HashSet<_>>(),
+                hashset! {"default"}
             );
         }
     }
@@ -765,6 +786,8 @@ mod tests {
             ("index.mjs", "reaches"),
             ("index.mjs", "reaches2"),
             ("index.mjs", "source4"),
+            ("index.mjs", "source5"),
+            ("source5.mjs", "foo"),
         });
     }
 

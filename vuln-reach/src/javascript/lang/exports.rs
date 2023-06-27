@@ -203,6 +203,16 @@ impl<'a> EsmExport<'a> {
             EsmExport::Name(node) | EsmExport::Scope(node) | EsmExport::Expression(node) => *node,
         }
     }
+
+    // Determine if the expression export contains the specified node.
+    pub fn expression_contains(&self, node: Node<'a>) -> bool {
+        match self {
+            EsmExport::Name(_) | EsmExport::Scope(_) => false,
+            EsmExport::Expression(export) => {
+                export.start_byte() <= node.start_byte() && export.end_byte() >= node.end_byte()
+            },
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]

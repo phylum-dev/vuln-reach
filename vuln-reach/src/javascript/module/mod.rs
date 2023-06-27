@@ -9,6 +9,7 @@ use itertools::Itertools;
 use ouroboros::self_referencing;
 use tree_sitter::Node;
 
+use super::lang::exports::EsmExport;
 use crate::javascript::lang::accesses::{AccessEdge, AccessGraph};
 use crate::javascript::lang::exports::{CommonJsExports, EsmExports, Exports};
 use crate::javascript::lang::imports::Imports;
@@ -135,8 +136,17 @@ impl Module {
                 let last_node = access_path.last().unwrap();
                 // The name of this path to export is either "default" or the name of the
                 // last identifier in the path.
+                //
+                // The guard condition ensures that `last_node` is the default export node,
+                // to prevent shadowing other exports.
                 let name = match exports.default.as_ref() {
-                    Some(default) if default.node() == last_node.access().scope => "default",
+                    Some(EsmExport::Scope(node)) if node == &last_node.access().scope => "default",
+                    Some(EsmExport::Name(node)) if node == &last_node.access().node => "default",
+                    Some(export @ EsmExport::Expression(_))
+                        if export.expression_contains(last_node.access().node) =>
+                    {
+                        "default"
+                    },
                     _ => self.tree().repr_of(last_node.accessed()),
                 };
 
