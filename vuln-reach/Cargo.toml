@@ -1,6 +1,6 @@
 [package]
 name = "vuln-reach"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Code reachability path analysis."
 authors = ["Phylum, Inc. <engineering@phylum.io>"]
@@ -8,6 +8,7 @@ repository = "https://github.com/phylum-dev/vuln-reach"
 documentation = "https://docs.rs/vuln-reach"
 license-file = "../LICENSE"
 rust-version = "1.68"
+readme = "../README.md"
 
 [dependencies]
 flate2 = "1.0.24"
