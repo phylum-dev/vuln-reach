@@ -42,13 +42,10 @@ let package_resolver = PackageResolver::builder()
   .build();
   
 // Build a project from the package resolver.
-let project = Project::new(
-  package_resolver,
-  vec!["path-scurry", "lru-cache", "minipass"]
-);
+let project = Project::new(package_resolver);
 
 // Define a target node.
-let vulnerable_node = VulnerableNode::new("lru-cache", "index.js", 1017, 24);
+let vulnerable_node = VulnerableNode::new("lru-cache", "index.js", 1017, 17, 1017, 24);
 
 // Compute the reachability graph.
 let reachability = project.reachability(&vulnerable_node);
