@@ -2,11 +2,12 @@
 name = "vuln-reach"
 version = "0.1.0"
 edition = "2021"
-description = "A library for building tools to determine if vulnerabilities are reachable in a code base."
+description = "Code reachability path analysis."
 authors = ["Phylum, Inc. <engineering@phylum.io>"]
 repository = "https://github.com/phylum-dev/vuln-reach"
 documentation = "https://docs.rs/vuln-reach"
 license-file = "../LICENSE"
+rust-version = "1.70"
 
 [dependencies]
 flate2 = "1.0.24"
