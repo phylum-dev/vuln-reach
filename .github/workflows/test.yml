@@ -27,5 +27,11 @@ jobs:
       - name: Clippy
         run: cargo clippy -- -D warnings
 
+      - name: Oldstable
+        run: |
+          oldstable=$(cat "./vuln-reach/Cargo.toml" | grep "rust-version" | sed 's/.*"\(.*\)".*/\1/')
+          rustup toolchain install --profile minimal "$oldstable"
+          cargo "+$oldstable" check
+
       - name: Tests
         run: cargo test
