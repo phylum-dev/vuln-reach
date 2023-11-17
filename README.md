@@ -44,7 +44,7 @@ let package_resolver = PackageResolver::builder()
 // Build a project from the package resolver.
 let project = Project::new(package_resolver);
 
-// Define a target node.
+// Define a target node (rows/columns are zero-indexed).
 let vulnerable_node = VulnerableNode::new("lru-cache", "index.js", 1017, 17, 1017, 24);
 
 // Compute the reachability graph.
