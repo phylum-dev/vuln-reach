@@ -260,6 +260,14 @@ impl<'a> AccessGraph<'a> {
             }
             visited_nodes.insert(node);
 
+            // Ensure that the node is of kind identifier.
+            if node.kind() != "identifier" {
+                return Err(Error::Generic(format!(
+                    "Node {node:?} of kind {} is not an identifier",
+                    node.kind()
+                )));
+            }
+
             // Retrieve the access scope of the current node, which must exist for all
             // identifiers.
             let access = access_scopes.get(&node).copied().ok_or_else(|| {

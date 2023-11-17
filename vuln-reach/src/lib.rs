@@ -27,13 +27,13 @@ pub fn js_parser() -> Parser {
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("language error")]
+    #[error("language error: {0}")]
     LanguageError(#[from] LanguageError),
-    #[error("query error")]
+    #[error("query error: {0}")]
     QueryError(#[from] QueryError),
-    #[error("i/o error")]
+    #[error("i/o error: {0}")]
     IoError(#[from] io::Error),
-    #[error("generic")]
+    #[error("{0}")]
     Generic(String),
     #[error("tree contains parse errors")]
     ParseError,

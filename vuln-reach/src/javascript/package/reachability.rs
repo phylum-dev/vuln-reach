@@ -37,11 +37,11 @@ fn identify_import_nodes<'a, R: ModuleResolver>(
 
             esm.into_iter()
                 .filter(|esm_import| {
-                    let Ok(resolved_spec) = package
-                        .resolver()
-                        .resolve_relative(esm_import.source(), dependent_spec) else {
-                            return false;
-                        };
+                    let Ok(resolved_spec) =
+                        package.resolver().resolve_relative(esm_import.source(), dependent_spec)
+                    else {
+                        return false;
+                    };
 
                     resolved_spec == imported_spec_abs
                 })
@@ -57,11 +57,11 @@ fn identify_import_nodes<'a, R: ModuleResolver>(
         Imports::CommonJs(cjs) => cjs
             .into_iter()
             .filter(|&cjs_import| {
-                let Ok(resolved_spec) = package
-                    .resolver()
-                    .resolve_relative(cjs_import.source(), dependent_spec) else {
-                        return false;
-                    };
+                let Ok(resolved_spec) =
+                    package.resolver().resolve_relative(cjs_import.source(), dependent_spec)
+                else {
+                    return false;
+                };
 
                 resolve_path(resolved_spec, |spec| spec == imported_spec_abs).is_some()
             })
@@ -142,15 +142,12 @@ fn compute_paths_from_export_to_modules<'a, R: ModuleResolver>(
 
         // Find paths from the imported dependency nodes to the dependent export
         // nodes.
-        let dependent_paths_from_imports_to_exports = dependent_imports.into_iter().fold(
-            Ok::<_, Error>(Vec::new()),
-            |out, import_node| {
-                let mut out = out?;
+        let dependent_paths_from_imports_to_exports =
+            dependent_imports.into_iter().try_fold(Vec::new(), |mut out, import_node| {
                 out.extend(dependent_module.paths_to_exports(import_node)?);
 
-                Ok(out)
-            },
-        )?;
+                Ok::<_, Error>(out)
+            })?;
 
         let dependent_dependents = package.cache().dependents_of(dependent).collect::<Vec<_>>();
 

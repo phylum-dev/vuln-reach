@@ -30,7 +30,7 @@ packages = [
   { name = "generic-pool", version = "3.8.2" },
 ]
 vuln = [
-  { package = "generic-pool", module = "lib/Pool.js", start_row = 743, start_column = 17, end_row = 743, end_column = 21 }
+  { package = "generic-pool", module = "lib/Pool.js", start_row = 744, start_column = 18, end_row = 744, end_column = 22 }
 ]
 
 [[projects]]
@@ -42,16 +42,22 @@ packages = [
   { name = "minipass", version = "4.0.2" },
 ]
 vuln = [
-  { package = "lru-cache", module = "index.js", start_row = 1017, start_column = 17, end_row = 1017, end_column = 24 }
+  { package = "lru-cache", module = "index.js", start_row = 1018, start_column = 18, end_row = 1018, end_column = 25 }
 ]
 ```
 
 In each of those objects: 
-- `packages` is the list of packages, and their version, available in the project.
-- `vuln` states that there is a vulnerable node
-  in the specified `package`, in the file `module` at position `(row, column)`. Note that
-  the position is 0-indexed so what would look like `(10, 8)` in a text editor should be
-  specified as `(9, 7)`.
+- `packages` is the list of packages, and their version, available in the project. It must contain
+  the elements of the entire _transitive_ dependency tree, not just the first-level dependencies.
+  You can find the transitive dependency tree via the [Phylum CLI](https://github.com/phylum-dev/cli):
+  ```shell
+  $ npm init -y && npm i --save <top level packages>  # for a new project
+  $ phylum parse package-lock.json
+  ```
+- `vuln` indicates a vulnerable node in the specified `package`, in the file
+  `module` at position `(row, column)`. Note that, differently from the library,
+  the position is 1-indexed so specify these values in the same way they are
+  displayed in a text editor.
 
 The term "vulnerable node" is used loosely here -- any identifier can be chosen as the
 target node that will be searched for.

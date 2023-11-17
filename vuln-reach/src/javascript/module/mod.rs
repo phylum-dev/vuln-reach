@@ -444,9 +444,10 @@ mod tests {
         assert!(paths.len() == 1, "Wrong number of paths found");
 
         let Some(PathToExport::SideEffect { name, access_path, effect_node }) =
-            paths.into_iter().next() else {
-                panic!("Path found is not to a side effect")
-            };
+            paths.into_iter().next()
+        else {
+            panic!("Path found is not to a side effect")
+        };
 
         assert_eq!(name, "foo", "Wrong side effect name {name}");
         assert_eq!(

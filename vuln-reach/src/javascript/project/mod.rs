@@ -444,7 +444,9 @@ fn topological_sort<N: Copy + PartialEq + Eq + Hash>(edges: &[(N, N)]) -> Result
     // Input graph should be a DAG hence not have any cycles; it means that
     // all the edges have been processed.
     if adj_lists.iter().any(|(_, s)| !s.is_empty()) {
-        return Err(Error::Generic("Could not find topological ordering: cycles detected".into()));
+        return Err(Error::Generic(
+            "Could not find topological ordering: cycles detected in the dependency tree".into(),
+        ));
     }
 
     Ok(ordering)
