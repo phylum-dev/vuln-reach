@@ -124,7 +124,11 @@ impl Display for NodeValidation {
         write!(f, "Invalid node representation: ")?;
 
         if let Some(((start_row, start_column), (end_row, end_column))) = self.start_after_end {
-            write!(f, "Start position ({start_row}, {start_column}) is after end position ({end_row}, {end_column}); ")?;
+            write!(
+                f,
+                "Start position ({start_row}, {start_column}) is after end position ({end_row}, \
+                 {end_column}); "
+            )?;
         }
 
         if self.zero_value {
