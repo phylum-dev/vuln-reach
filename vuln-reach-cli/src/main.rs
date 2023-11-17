@@ -1,15 +1,19 @@
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use futures::future;
-use serde::Deserialize;
+use serde::de::Error;
+use serde::{Deserialize, Deserializer};
 use tokio::fs;
 use vuln_reach::javascript::package::reachability::{NodePath, VulnerableNode};
 use vuln_reach::javascript::package::resolver::PackageResolver;
 use vuln_reach::javascript::package::Package;
 use vuln_reach::javascript::project::Project;
+
+type StdResult<T, E> = std::result::Result<T, E>;
 
 #[derive(Deserialize)]
 struct NpmRegistry {
@@ -77,7 +81,87 @@ struct ProjectDef {
     name: String,
     tarballs: PathBuf,
     packages: Vec<PackageDef>,
+    #[serde(deserialize_with = "deserialize_vulnerable_node")]
     vuln: Vec<VulnerableNode>,
+}
+
+#[derive(Default)]
+struct NodeValidation {
+    start_after_end: Option<((usize, usize), (usize, usize))>,
+    zero_value: bool,
+}
+
+impl NodeValidation {
+    fn new(node: &VulnerableNode) -> Self {
+        let start_row = node.start_row();
+        let start_column = node.start_column();
+        let end_row = node.end_row();
+        let end_column = node.end_column();
+
+        let start_after_end =
+            if start_row > end_row || (start_row == end_row && start_column > end_column) {
+                Some(((start_row, start_column), (end_row, end_column)))
+            } else {
+                None
+            };
+
+        Self {
+            start_after_end,
+            zero_value: node.start_row() == 0
+                || node.end_row() == 0
+                || node.start_column() == 0
+                || node.end_column() == 0,
+        }
+    }
+
+    fn is_error(&self) -> bool {
+        self.start_after_end.is_some() || self.zero_value
+    }
+}
+
+impl Display for NodeValidation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Invalid node representation: ")?;
+
+        if let Some(((start_row, start_column), (end_row, end_column))) = self.start_after_end {
+            write!(f, "Start position ({start_row}, {start_column}) is after end position ({end_row}, {end_column}); ")?;
+        }
+
+        if self.zero_value {
+            write!(f, "Zero values are not allowed")?;
+        }
+
+        Ok(())
+    }
+}
+
+fn deserialize_vulnerable_node<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> StdResult<Vec<VulnerableNode>, D::Error> {
+    let nodes = Vec::<VulnerableNode>::deserialize(deserializer)?;
+    nodes
+        .into_iter()
+        .map(|node| {
+            let validation = NodeValidation::new(&node);
+            if validation.is_error() {
+                return Err(D::Error::custom(validation.to_string()));
+            }
+
+            let start_row = node.start_row();
+            let start_column = node.start_column();
+            let end_row = node.end_row();
+            let end_column = node.end_column();
+
+            Ok(VulnerableNode::new(
+                node.package(),
+                node.module(),
+                start_row.saturating_sub(1),
+                start_column.saturating_sub(1),
+                end_row.saturating_sub(1),
+                end_column.saturating_sub(1),
+            ))
+        })
+        .collect::<StdResult<Vec<VulnerableNode>, D::Error>>()
 }
 
 impl ProjectDef {
