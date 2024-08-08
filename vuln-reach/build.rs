@@ -36,7 +36,7 @@ impl TreeSitterLang {
 
         let mut cmd = Command::new("git");
 
-        cmd.current_dir(&out_dir()).arg("clone").arg(self.repo()).arg(self.path());
+        cmd.current_dir(out_dir()).arg("clone").arg(self.repo()).arg(self.path());
 
         if let Some(tag) = self.tag {
             cmd.arg("-b").arg(tag);

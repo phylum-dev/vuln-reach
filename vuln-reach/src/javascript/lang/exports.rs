@@ -486,13 +486,13 @@ fn test_esm_exports() {
     assert!(matches!(exports.objects.get("name13"), Some(EsmExport::Name(_))));
     assert!(matches!(exports.default, Some(EsmExport::Scope(_))));
 
-    assert!(exports.objects.get("DefaultClassName").is_none());
-    assert!(exports.objects.get("defaultFunctionName").is_none());
-    assert!(exports.objects.get("defaultGeneratorFunctionName").is_none());
+    assert!(!exports.objects.contains_key("DefaultClassName"));
+    assert!(!exports.objects.contains_key("defaultFunctionName"));
+    assert!(!exports.objects.contains_key("defaultGeneratorFunctionName"));
 
-    assert!(exports.objects.get("ClassName").is_some());
-    assert!(exports.objects.get("functionName").is_some());
-    assert!(exports.objects.get("generatorFunctionName").is_some());
+    assert!(exports.objects.contains_key("ClassName"));
+    assert!(exports.objects.contains_key("functionName"));
+    assert!(exports.objects.contains_key("generatorFunctionName"));
 
     assert_eq!(exports.objects.len(), 18);
 }
