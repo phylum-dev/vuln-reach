@@ -51,7 +51,7 @@ impl TreeSitterLang {
 }
 
 fn main() {
-    let js = TreeSitterLang::new("javascript", None);
+    let js = TreeSitterLang::new("javascript", Some("v0.20.1"));
     js.clone_repository();
 
     cc::Build::new()
