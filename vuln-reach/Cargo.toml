@@ -7,7 +7,7 @@ authors = ["Phylum, Inc. <engineering@phylum.io>"]
 repository = "https://github.com/phylum-dev/vuln-reach"
 documentation = "https://docs.rs/vuln-reach"
 license-file = "../LICENSE"
-rust-version = "1.70"
+rust-version = "1.74"
 readme = "../README.md"
 
 [dependencies]

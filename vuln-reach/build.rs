@@ -36,7 +36,7 @@ impl TreeSitterLang {
 
         let mut cmd = Command::new("git");
 
-        cmd.current_dir(&out_dir()).arg("clone").arg(self.repo()).arg(self.path());
+        cmd.current_dir(out_dir()).arg("clone").arg(self.repo()).arg(self.path());
 
         if let Some(tag) = self.tag {
             cmd.arg("-b").arg(tag);
@@ -51,7 +51,7 @@ impl TreeSitterLang {
 }
 
 fn main() {
-    let js = TreeSitterLang::new("javascript", None);
+    let js = TreeSitterLang::new("javascript", Some("v0.20.1"));
     js.clone_repository();
 
     cc::Build::new()
