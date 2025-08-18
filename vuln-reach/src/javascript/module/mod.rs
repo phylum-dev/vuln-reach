@@ -15,10 +15,10 @@ use crate::javascript::lang::exports::{CommonJsExports, EsmExports, Exports};
 use crate::javascript::lang::imports::Imports;
 use crate::javascript::lang::symbol_table::SymbolTable;
 pub use crate::javascript::module::module_cache::ModuleCache;
+pub use crate::javascript::module::resolver::ModuleResolver;
 pub use crate::javascript::module::resolver::fs::FilesystemModuleResolver;
 pub use crate::javascript::module::resolver::mem::MemModuleResolver;
 pub use crate::javascript::module::resolver::tgz::TarballModuleResolver;
-pub use crate::javascript::module::resolver::ModuleResolver;
 use crate::{Error, Result, Tree};
 
 #[derive(Clone, Debug)]
@@ -86,19 +86,19 @@ impl Module {
         self.borrow_tree()
     }
 
-    pub fn imports(&self) -> &Imports {
+    pub fn imports(&self) -> &Imports<'_> {
         self.borrow_imports()
     }
 
-    pub fn exports(&self) -> &Exports {
+    pub fn exports(&self) -> &Exports<'_> {
         self.borrow_exports()
     }
 
-    pub fn symbol_table(&self) -> &SymbolTable {
+    pub fn symbol_table(&self) -> &SymbolTable<'_> {
         self.borrow_symbol_table()
     }
 
-    pub fn accesses(&self) -> &AccessGraph {
+    pub fn accesses(&self) -> &AccessGraph<'_> {
         self.borrow_accesses()
     }
 

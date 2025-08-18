@@ -10,12 +10,12 @@ use std::path::{Path, PathBuf};
 use reachability::{PackageReachability, VulnerableNode};
 
 use super::lang::imports::{CommonJsImports, EsmImports};
+use crate::Result;
 use crate::javascript::lang::imports::Imports;
 use crate::javascript::module::{
     FilesystemModuleResolver, MemModuleResolver, Module, ModuleCache, ModuleResolver,
     TarballModuleResolver,
 };
-use crate::Result;
 
 /// A Javascript package.
 pub struct Package<R: ModuleResolver> {
@@ -60,7 +60,7 @@ where
     /// For convenience, we are going to mark all imports that _don't_ resolve
     /// inside the package as foreign; true unreachable exports will be just
     /// dropped.
-    pub fn foreign_imports(&self) -> HashMap<&PathBuf, Imports> {
+    pub fn foreign_imports(&self) -> HashMap<&PathBuf, Imports<'_>> {
         let mut foreign_imports = HashMap::new();
 
         // Strategy for detecting foreign imports: discard trivially relative
