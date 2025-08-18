@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use tree_sitter::{Node, Query, QueryCursor};
 
 use super::symbol_table::SymbolTable;
-use crate::{Cursor, Error, Result, Tree, TreeCursorCache, JS};
+use crate::{Cursor, Error, JS, Result, Tree, TreeCursorCache};
 
 /// An instance of a variable access (call or right-hand assignment).
 /// Represents an edge from the access scope to the declaration scope.

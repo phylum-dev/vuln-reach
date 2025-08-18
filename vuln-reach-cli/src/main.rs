@@ -2,15 +2,15 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::Parser;
 use futures::future;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
 use tokio::fs;
+use vuln_reach::javascript::package::Package;
 use vuln_reach::javascript::package::reachability::{NodePath, VulnerableNode};
 use vuln_reach::javascript::package::resolver::PackageResolver;
-use vuln_reach::javascript::package::Package;
 use vuln_reach::javascript::project::Project;
 
 type StdResult<T, E> = std::result::Result<T, E>;

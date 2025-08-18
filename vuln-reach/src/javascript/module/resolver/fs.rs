@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use super::{entry_point, is_valid_js_extension};
-use crate::javascript::module::resolver::ModuleResolver;
 use crate::javascript::module::Module;
+use crate::javascript::module::resolver::ModuleResolver;
 use crate::{Error, Result, Tree};
 
 pub struct FilesystemModuleResolver {

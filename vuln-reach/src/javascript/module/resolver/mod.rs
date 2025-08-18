@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use crate::javascript::module::Module;
-use crate::{util, Error, Result};
+use crate::{Error, Result, util};
 
 /// Trait for implementing module resolvers.
 pub trait ModuleResolver {
