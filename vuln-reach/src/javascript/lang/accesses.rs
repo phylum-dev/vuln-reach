@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use tree_sitter::{Node, Query, QueryCursor};
 
 use super::symbol_table::SymbolTable;
-use crate::{Cursor, Error, Result, Tree, TreeCursorCache, JS};
+use crate::{Cursor, Error, JS, Result, Tree, TreeCursorCache};
 
 /// An instance of a variable access (call or right-hand assignment).
 /// Represents an edge from the access scope to the declaration scope.
@@ -308,7 +308,7 @@ impl<'a> AccessGraph<'a> {
                 // act like a declaration in their scope.
                 if let Some(accessor) = declaration_access.accessor.filter(|node| {
                     let mut cursor = Cursor::new(self.tree, *node).unwrap();
-                    cursor.goto_parent().map_or(false, |node| node.kind() != "formal_parameters")
+                    cursor.goto_parent().is_some_and(|node| node.kind() != "formal_parameters")
                 }) {
                     // If the accessor is suitable, push it onto the queue alongside the
                     // path that leads to it.

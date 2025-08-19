@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use crate::javascript::module::Module;
-use crate::{util, Error, Result};
+use crate::{Error, Result, util};
 
 /// Trait for implementing module resolvers.
 pub trait ModuleResolver {
@@ -114,7 +114,7 @@ fn is_relative<P: AsRef<Path>>(path: P) -> bool {
 }
 
 fn is_valid_js_extension<P: AsRef<Path>>(path: P) -> bool {
-    path.as_ref().extension().map_or(false, |ext| {
+    path.as_ref().extension().is_some_and(|ext| {
         let lowercase_ext = ext.to_string_lossy().to_lowercase();
         ["js", "mjs", "cjs"].contains(&&*lowercase_ext)
     })

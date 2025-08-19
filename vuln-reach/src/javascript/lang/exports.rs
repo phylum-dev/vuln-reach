@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use lazy_static::lazy_static;
 use tree_sitter::{Node, Query, QueryCursor};
 
-use crate::{Error, Tree, JS};
+use crate::{Error, JS, Tree};
 
 // CommonJS
 //

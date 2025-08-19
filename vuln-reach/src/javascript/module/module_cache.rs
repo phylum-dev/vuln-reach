@@ -4,9 +4,9 @@ use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
 use super::resolver::resolve_path;
+use crate::Result;
 use crate::javascript::lang::imports::Imports;
 use crate::javascript::module::{Module, ModuleResolver};
-use crate::Result;
 
 // Type aliases are just for clarity.
 type RelativeSpec = PathBuf;

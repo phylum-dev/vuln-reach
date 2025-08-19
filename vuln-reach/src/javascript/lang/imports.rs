@@ -6,7 +6,7 @@ use std::ops::Deref;
 use lazy_static::lazy_static;
 use tree_sitter::{Node, Query, QueryCursor};
 
-use crate::{Cursor, Error, Tree, JS};
+use crate::{Cursor, Error, JS, Tree};
 
 // CommonJS
 //

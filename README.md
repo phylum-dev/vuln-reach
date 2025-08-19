@@ -1,6 +1,6 @@
 ![Vuln Reach Logo](https://github.com/phylum-dev/vuln-reach/raw/main/assets/logo.png)
 
-![GitHub Repo stars](https://img.shields.io/github/stars/phylum-dev/vuln-reach) ![GitHub](https://img.shields.io/github/license/phylum-dev/vuln-reach) ![Discord](https://img.shields.io/discord/1070071012353376387)
+![GitHub Repo stars](https://img.shields.io/github/stars/phylum-dev/vuln-reach) ![GitHub](https://img.shields.io/github/license/phylum-dev/vuln-reach)
 
 ---
 

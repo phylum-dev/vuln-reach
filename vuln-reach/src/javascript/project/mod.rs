@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use tree_sitter::Node;
 
 use super::lang::imports::Imports;
-use super::package::reachability::{PackageReachability, VulnerableNode};
 use super::package::Package;
+use super::package::reachability::{PackageReachability, VulnerableNode};
 use crate::javascript::module::resolver::ModuleResolver;
 use crate::javascript::package::reachability::NodePath;
 use crate::javascript::package::resolver::PackageResolver;
